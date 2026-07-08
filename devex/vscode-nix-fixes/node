@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Wrapper that resolves `node` from the project's direnv-managed Nix dev
+# shell. Used as `oxc.path.node` in .vscode/settings.json so VS Code can
+# launch oxfmt/oxlint (whose shebang requires `node`) even when VS Code
+# itself was launched outside the dev shell.
+#
+# Works on any machine that has `direnv` in PATH (Linux + macOS Nix users).
+set -euo pipefail
+script_path=$(realpath "$0")
+script_dir=$(dirname "${script_path}")
+workspace=$(cd "${script_dir}/../.." && pwd)
+exec direnv exec "${workspace}" node "$@"

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Entries knip walks from. Knip auto-detects most via package.json
+  // `scripts`; we only list ones it can't infer (bash entry-points and
+  // Pulumi's main entry which lives outside package.json).
+  "entry": [
+    "devops/infra/src/index.ts",
+    "devops/matrix/src/index.ts",
+    "devex/scripts/src/postinstall.ts",
+    "devex/scripts/src/cli/index.ts",
+  ],
+  // Source set knip considers reachable. The unreachable delta is reported
+  // as "unused files" / "unused exports".
+  "project": ["devops/**/*.ts", "devex/**/*.ts"],
+  "ignore": [
+    // Generated SDK — `@hey-api/openapi-ts` output. Vendored as a black
+    // box; per-symbol pruning here would just be re-generated next bump.
+    "devex/generated/**",
+    // crd2pulumi output — standalone package with its own tsconfig.
+    // Excluded from the main TS build; consumed via local imports as needed.
+    "devops/crds/generated/**",
+    // The chrome-extension `src/` files + the `run-services/` and
+    // `shell-audit/` subtrees + a few standalone scripts (`podl.ts`,
+    // `unt.ts`, `redirect-mapper-hook.ts`) are work-in-progress / parked
+    // code we're keeping in-tree on purpose. They're not wired to any
+    // entry point right now, but we don't want them flagged on every
+    // lint run. Re-evaluate when one of them gets activated (delete from
+    // here so knip starts reporting it again).
+    "devex/bookmark-sync-chrome-extention/extention/src/**",
+    "devex/scripts/src/run-services/**",
+    "devex/scripts/src/shell-audit/**",
+    "devex/scripts/src/podl.ts",
+    "devex/scripts/src/redirect-mapper-hook.ts",
+    "devex/scripts/src/unt.ts",
+    // Picked up by `lint-staged` at runtime via filename convention, not
+    // statically imported anywhere — knip can't see the edge.
+    "devex/configs/src/lint-staged.config.ts",
+  ],
+  "ignoreDependencies": [
+    // CLI-only tools (spawned as binaries by lint.ts / format.ts) — knip
+    // can't see binary invocations from JS spawn() so it false-flags them.
+    "oxlint",
+    "oxfmt",
+    "prettier",
+    // Used by the generated SDK (which itself is in `ignore` above).
+    "@hey-api/client-fetch",
+    // Invoked via `bunx @hey-api/openapi-ts` in codegen/rauthy-gen-types.ts — not a static import.
+    "@hey-api/openapi-ts",
+    // Loaded dynamically by pino when `transport.target` names it
+    // (runtime resolution, not a static import).
+    "pino-pretty",
+    // Imported by `liveness-checks.ts` under `run-services/` — that
+    // tree is in `ignore` so knip can't see the static import.
+    "pino",
+    // Imported as a type by `lint-staged.config.ts` (also ignored) and
+    // executed externally by the `lint-staged` binary.
+    "lint-staged",
+    // Used by `run-services/cli-builder.ts` (parked tree under `ignore`).
+    "commander",
+    "commander-js",
+    "@commander-js/extra-typings",
+    // Type-only import in the chrome extension `src/` (also ignored).
+    "@types/chrome",
+    // No static imports in current source. Kept installed pending
+    // confirmation; remove from package.json + this list when nothing
+    // ends up needing them.
+    "yaml",
+    "tsx",
+    // CLI-only tool invoked via `bunx tokscale` — no static import.
+    "tokscale",
+    // apps/light — not in knip's project scope (devops/devex only)
+    "hono",
+    "@hono/node-server",
+    "@hono/zod-validator",
+    "inversify",
+  ],
+  "ignoreBinaries": [
+    // Provided by the nix flake (not npm) — `jq` for JSON, `mc` for
+    // MinIO state bucket bootstrap. Available on PATH via direnv.
+    "jq",
+    "mc",
+    // NixOS-only ELF patcher — nix flake provides it on PATH.
+    "patchelf",
+    "which",
+  ],
+}

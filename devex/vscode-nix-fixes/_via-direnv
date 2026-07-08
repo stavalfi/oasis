@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Generic wrapper: resolves the tool named after this file from the project's
+# direnv-managed Nix dev shell. Used by VS Code extensions whose default
+# `<tool>.executablePath` looks for the tool on PATH — VS Code launched from
+# the desktop has none of the dev-shell binaries on PATH.
+#
+# Symlink this file to <tool-name> (e.g. ln -s _via-direnv shfmt), then point
+# the VS Code extension at the symlink path.
+set -euo pipefail
+
+# VSCode's extension host hands children a stripped env: no PATH, no HOME on
+# some launch methods. Seed PATH with the standard NixOS locations + generic
+# Unix fallbacks so `readlink`, `id`, `getent`, `direnv` etc. resolve.
+prev_path=${PATH:-}
+export PATH="/run/current-system/sw/bin:/usr/bin:/bin:/usr/local/bin${prev_path:+:${prev_path}}"
+
+# Recover HOME from passwd if it wasn't passed. Needed for ~/.nix-profile/bin
+# (where the user's installed direnv typically lives on NixOS) and as fallback
+# CWD for tools that respect it.
+if [[ -z "${HOME:-}" ]]; then
+  user=$(id -un)
+  HOME=$(getent passwd "${user}" | cut -d: -f6)
+  export HOME
+fi
+export PATH="${HOME}/.nix-profile/bin:${PATH}"
+
+# Use bash parameter expansion in place of basename/dirname/realpath so this
+# survives even if the seeded PATH ended up missing coreutils on some exotic
+# distro.
+tool_name="${0##*/}"
+
+# Resolve a chain of symlinks manually. The wrapper is installed as
+# `<tool>` → `_via-direnv` (one hop) but the loop stays defensive in case
+# someone re-symlinks the layout.
+script_path="$0"
+while [[ -L "${script_path}" ]]; do
+  link_target=$(readlink "${script_path}")
+  if [[ "${link_target}" = /* ]]; then
+    script_path="${link_target}"
+  else
+    script_path="${script_path%/*}/${link_target}"
+  fi
+done
+script_dir="${script_path%/*}"
+workspace=$(cd "${script_dir}/../.." && pwd)
+
+exec direnv exec "${workspace}" "${tool_name}" "$@"

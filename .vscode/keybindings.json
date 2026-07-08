@@ -1,0 +1,115 @@
+[
+  // Jump cursor to end of next word
+  {
+    "key": "ctrl+right",
+    "command": "cursorWordEndRight",
+    "when": "textInputFocus && !accessibilityModeEnabled"
+  },
+  // Jump cursor to end of previous word
+  {
+    "key": "ctrl+left",
+    "command": "cursorWordEndLeft",
+    "when": "textInputFocus && !accessibilityModeEnabled"
+  },
+  // Move cursor to end of line
+  {
+    "key": "alt+right",
+    "command": "cursorLineEnd"
+  },
+  // Move cursor to start of line
+  {
+    "key": "alt+left",
+    "command": "cursorLineStart"
+  },
+  // Duplicate current line downward
+  {
+    "key": "ctrl+alt+up",
+    "command": "editor.action.copyLinesDownAction",
+    "when": "editorTextFocus && !editorReadonly"
+  },
+  // Duplicate current line upward
+  {
+    "key": "ctrl+alt+down",
+    "command": "editor.action.copyLinesUpAction",
+    "when": "editorTextFocus && !editorReadonly"
+  },
+  // Rename selected file in Explorer with Enter (instead of opening it)
+  {
+    "key": "enter",
+    "command": "renameFile",
+    "when": "filesExplorerFocus && !inputFocus"
+  },
+  // Toggle right-side auxiliary bar while focused in terminal
+  {
+    "key": "ctrl+alt+b",
+    "command": "workbench.action.toggleAuxiliaryBar",
+    "when": "terminalFocus"
+  },
+  // Clear the terminal buffer
+  {
+    "key": "ctrl+k",
+    "command": "workbench.action.terminal.clear",
+    "when": "terminalFocus"
+  },
+  // Toggle left sidebar while focused in terminal
+  {
+    "key": "ctrl+b",
+    "command": "workbench.action.toggleSidebarVisibility",
+    "when": "terminalFocus"
+  },
+  // Trigger IntelliSense suggestions in editor
+  {
+    "key": "alt+space",
+    "command": "editor.action.triggerSuggest",
+    "when": "editorTextFocus"
+  },
+  // Navigate back in editor history
+  {
+    "key": "ctrl+-",
+    "command": "workbench.action.navigateBack"
+  },
+  // Navigate forward in editor history
+  {
+    "key": "ctrl+=",
+    "command": "workbench.action.navigateForward"
+  },
+  // Increase editor font size
+  {
+    "key": "ctrl+shift+=",
+    "command": "editor.action.fontZoomIn"
+  },
+  // Decrease editor font size
+  {
+    "key": "ctrl+shift+-",
+    "command": "editor.action.fontZoomOut"
+  },
+  // Unbind default terminal toggle so ctrl+` can be reused below
+  {
+    "key": "ctrl+`",
+    "command": "-workbench.action.terminal.toggleTerminal"
+  },
+  // Copy active file's absolute path (outside terminal)
+  {
+    "key": "ctrl+`",
+    "command": "copyFilePath",
+    "when": "!terminalFocus"
+  },
+  // Select all text in the terminal
+  {
+    "key": "ctrl+shift+a",
+    "command": "workbench.action.terminal.selectAll",
+    "when": "terminalFocus"
+  },
+  // Move cursor to first line of file
+  {
+    "key": "ctrl+up",
+    "command": "cursorTop",
+    "when": "textInputFocus"
+  },
+  // Move cursor to last line of file
+  {
+    "key": "ctrl+down",
+    "command": "cursorBottom",
+    "when": "textInputFocus"
+  }
+]

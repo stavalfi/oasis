@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "${repo_root}"
+
+# $1=prev HEAD, $2=new HEAD, $3=branch checkout flag (1=branch, 0=file)
+if [[ "${3}" == "1" ]]; then
+  devex/scripts/src/git-hooks/_helpers/install-if-deps-changed.sh "${1}" "${2}"
+fi

@@ -1,0 +1,17 @@
+{
+  "recommendations": [
+    "anthropic.claude-code",
+    "denoland.vscode-deno",
+    "eamodio.gitlens",
+    "redhat.vscode-yaml",
+    "fnando.linter",
+    "waderyan.gitblame",
+    "mkhl.direnv",
+    "oxc.oxc-vscode",
+    "timonwong.shellcheck",
+    "mkhl.shfmt",
+    "tamasfe.even-better-toml",
+    "editorconfig.editorconfig",
+    "hashicorp.terraform"
+  ]
+}

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ns="${1:-$(kubens | fzf --height 20%)}"
+[[ -n "${ns}" ]] && kubectl config set-context --current --namespace="${ns}" > /dev/null && echo "${ns}"

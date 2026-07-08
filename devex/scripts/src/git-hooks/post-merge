@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "${repo_root}"
+
+devex/scripts/src/git-hooks/_helpers/install-if-deps-changed.sh 'HEAD@{1}' HEAD

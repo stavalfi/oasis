@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/poc/devex/configs/toml-schemas/rauthy-config.schema.json",
+  "title": "Rauthy config.toml (subset)",
+  "description": "Local subset schema for Rauthy's config.toml. Upstream Rauthy does NOT publish a JSON schema for this file, so this only covers the sections we actively customize. Other top-level keys/tables pass through (additionalProperties=true at the root). Adding type/value constraints here protects the high-risk surface where upstream sample values silently override our env-var inputs — see rauthy-config.toml comments and feedback_verify_shipped_config_defaults.md.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "First-boot setup of the default admin user, OIDC client, and bootstrap dir. The full upstream field list (per src/data/src/rauthy_config.rs VarsBootstrap) is mirrored in `properties` below; `additionalProperties: false` catches typos like `admin_emails` instead of `admin_email`. Per the typo upstream uses, the argon2 key is `pasword_argon2id` (one `s`) — DO NOT rename.",
+      "properties": {
+        "admin_email": {
+          "type": "string",
+          "format": "email",
+          "description": "Default `admin@localhost`. Overridden by BOOTSTRAP_ADMIN_EMAIL. If you change this AND insert the same email via bootstrap users.json, the users.json INSERT silently fails on unique-constraint, and the env-var password wins."
+        },
+        "password_plain": {
+          "type": "string",
+          "minLength": 8,
+          "description": "Upstream ships a sample value here. Set BOOTSTRAP_ADMIN_PASSWORD_PLAIN env var instead — the env override maps to THIS field, NOT to `pasword_argon2id`."
+        },
+        "pasword_argon2id": {
+          "type": "string",
+          "pattern": "^\\$argon2id\\$",
+          "not": {
+            "const": "$argon2id$v=19$m=32768,t=3,p=2$mK+3taI5mnA+Gx8OjjKn5Q$XsOmyvt9fr0V7Dghhv3D0aTe/FjF36BfNS5QlxOPep0"
+          },
+          "description": "Note the typo `pasword` (missing second `s`) — this is the actual upstream key, do not correct it. Upstream ships a real sample hash that takes precedence over `password_plain` AND its env override. Leaving the sample uncommented makes BOOTSTRAP_ADMIN_PASSWORD_PLAIN silently ignored. The `not.const` guard fails the lint if anyone re-adds the exact upstream sample hash."
+        },
+        "api_key": {
+          "type": "string",
+          "description": "Overridden by BOOTSTRAP_API_KEY."
+        },
+        "api_key_secret": {
+          "type": "string",
+          "description": "Overridden by BOOTSTRAP_API_KEY_SECRET."
+        },
+        "bootstrap_dir": {
+          "type": "string",
+          "description": "Filesystem directory containing groups.json/users.json/clients.json. Overridden by BOOTSTRAP_DIR. We mount /app/bootstrap from a ConfigMap (see rauthy.ts)."
+        }
+      }
+    }
+  }
+}

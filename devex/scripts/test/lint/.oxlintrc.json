@@ -1,0 +1,36 @@
+{
+  "ignorePatterns": ["fixtures/**"],
+  "jsPlugins": ["../../src/oxc-linter-plugins/oxlint-plugin-poc-rules.ts"],
+  "rules": {
+    "poc-rules/no-anonymous-functions": "error",
+    "poc-rules/no-banned-words": [
+      "error",
+      {
+        "groups": [
+          {
+            "message": "docker and podman are banned here.",
+            "words": ["docker", "podman"]
+          }
+        ]
+      }
+    ],
+    "poc-rules/no-curl": [
+      "error",
+      {
+        "groups": [
+          {
+            "commands": ["curl", "wget"],
+            "message": "curl/wget are banned in tests."
+          }
+        ]
+      }
+    ],
+    "poc-rules/no-custom-resource": "error",
+    "poc-rules/no-private-keyword": "error",
+    "poc-rules/no-process-stream-write": "error",
+    "poc-rules/no-protected": "error",
+    "poc-rules/no-zod-passthrough": "error",
+    "poc-rules/require-access-modifiers": "error",
+    "poc-rules/require-object-params": "error"
+  }
+}

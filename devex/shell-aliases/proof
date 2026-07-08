@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+script_path=$(realpath "$0")
+script_dir=$(dirname "${script_path}")
+repo_root=$(git -C "${script_dir}" rev-parse --show-toplevel)
+today=$(date +%Y-%m-%d)
+exec sed -n "/^start-uuid=\"${1}\"\$/,/^end-uuid=\"${1}\"\$/p" "${repo_root}/devex/output/claude-shell-output-logs/${today}.log"

@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/poc/devex/configs/yaml-schemas/kind-cluster.schema.json",
+  "title": "kind Cluster (v1alpha4)",
+  "description": "Schema for kind cluster config files. See https://kind.sigs.k8s.io/docs/user/configuration/",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "apiVersion"],
+  "properties": {
+    "kind": { "const": "Cluster" },
+    "apiVersion": { "const": "kind.x-k8s.io/v1alpha4" },
+    "name": { "type": "string" },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/node" }
+    },
+    "networking": { "$ref": "#/definitions/networking" },
+    "kubeadmConfigPatches": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "kubeadmConfigPatchesJSON6902": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "containerdConfigPatches": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "containerdConfigPatchesJSON6902": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "featureGates": {
+      "type": "object",
+      "additionalProperties": { "type": "boolean" }
+    },
+    "runtimeConfig": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "nodeImage": { "type": "string" }
+  },
+  "definitions": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": { "enum": ["control-plane", "worker"] },
+        "image": { "type": "string" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "kubeadmConfigPatches": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "kubeadmConfigPatchesJSON6902": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "extraMounts": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/extraMount" }
+        },
+        "extraPortMappings": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/extraPortMapping" }
+        }
+      }
+    },
+    "extraMount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostPath", "containerPath"],
+      "properties": {
+        "hostPath": { "type": "string" },
+        "containerPath": { "type": "string" },
+        "readOnly": { "type": "boolean" },
+        "selinuxRelabel": { "type": "boolean" },
+        "propagation": { "enum": ["None", "HostToContainer", "Bidirectional"] }
+      }
+    },
+    "extraPortMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containerPort"],
+      "properties": {
+        "containerPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "hostPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "listenAddress": { "type": "string" },
+        "protocol": { "enum": ["TCP", "UDP", "SCTP"] }
+      }
+    },
+    "networking": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ipFamily": { "enum": ["ipv4", "ipv6", "dual"] },
+        "apiServerAddress": { "type": "string" },
+        "apiServerPort": { "type": "integer" },
+        "podSubnet": { "type": "string" },
+        "serviceSubnet": { "type": "string" },
+        "disableDefaultCNI": { "type": "boolean" },
+        "kubeProxyMode": { "enum": ["iptables", "ipvs", "nftables", "none"] },
+        "dnsSearch": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "ignorePatterns": ["fixtures/**"],
+  "jsPlugins": ["../../src/oxc-linter-plugins/oxlint-plugin-poc-rules.ts"],
+  "rules": {
+    "poc-rules/no-global-functions": "error"
+  }
+}

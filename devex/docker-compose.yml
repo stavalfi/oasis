@@ -1,0 +1,109 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-go/master/schema/compose-spec.json
+services:
+  redis:
+    image: docker.io/bitnamilegacy/redis-cluster:7.0
+    environment:
+      ALLOW_EMPTY_PASSWORD: "yes"
+      REDIS_CLUSTER_REPLICAS: 1
+      REDIS_NODES: 127.0.0.1 127.0.0.1 127.0.0.1
+      REDIS_CLUSTER_CREATOR: "yes"
+      REDIS_CLUSTER_DYNAMIC_IPS: "no"
+      REDIS_CLUSTER_ANNOUNCE_IP: 127.0.0.1
+      REDIS_PORT_NUMBER: 6479
+    ports:
+      - "16479:6479"
+    # healthcheck:
+    #   test: ["CMD-SHELL", "redis-cli -p 6479 ping | grep -q PONG"]
+    #   interval: 1s
+    #   timeout: 5s
+    #   retries: 30
+  # redpanda:
+  #   image: redpandadata/redpanda:v23.1.7
+  #   environment:
+  #     KAFKAJS_NO_PARTITIONER_WARNING: 1
+  #   ports:
+  #     - "17492:17492"
+  #   command:
+  #     - redpanda
+  #     - start
+  #     - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:17492
+  #     - --advertise-kafka-addr internal://redpanda:9092,external://localhost:17492
+  #     - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+  #     - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+  #     - --rpc-addr redpanda:33145
+  #     - --advertise-rpc-addr redpanda:33145
+  #     - --smp 1
+  #     - --memory 1G
+  #     - --mode dev-container
+  #     - --default-log-level=info
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "rpk cluster info --brokers redpanda:9092 >/dev/null"]
+  #     interval: 1s
+  #     timeout: 5s
+  #     retries: 30
+  # schema-registry:
+  #   image: confluentinc/cp-schema-registry:7.7.1
+  #   depends_on:
+  #     redpanda:
+  #       condition: service_healthy
+  #   ports:
+  #     - "18081:8081"
+  #   environment:
+  #     SCHEMA_REGISTRY_HOST_NAME: schema-registry
+  #     SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+  #     SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://redpanda:9092
+  #     SCHEMA_REGISTRY_KAFKASTORE_TOPIC: _schemas
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8081/subjects >/dev/null"]
+  #     interval: 1s
+  #     timeout: 5s
+  #     retries: 30
+  # console:
+  #   image: redpandadata/console:v2.2.3
+  #   depends_on:
+  #     redpanda:
+  #       condition: service_healthy
+  #     schema-registry:
+  #       condition: service_healthy
+  #   ports:
+  #     - "18080:8080"
+  #   entrypoint: /bin/sh
+  #   command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+  #   environment:
+  #     CONFIG_FILEPATH: /tmp/config.yml
+  #     CONSOLE_CONFIG_FILE: |
+  #       kafka:
+  #         brokers: ["redpanda:9092"]
+  #         schemaRegistry:
+  #           enabled: true
+  #           urls: ["http://schema-registry:8081"]
+  #       redpanda:
+  #         adminApi:
+  #           enabled: true
+  #           urls: ["http://redpanda:9644"]
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/admin/startup"]
+  #     interval: 1s
+  #     timeout: 5s
+  #     retries: 30
+  # Headroom LLM-context-compression proxy. Listens on :8787 and
+  # transparently compresses Anthropic API traffic — point `claude` at it
+  # via `ANTHROPIC_BASE_URL=http://127.0.0.1:8787`. The image bundles the
+  # Rust compression core (no HEADROOM_REQUIRE_RUST_CORE=false needed) but
+  # downloads ~150 MB of ONNX model weights from HuggingFace on first boot;
+  # we mount a named volume on /root/.cache so subsequent restarts reuse
+  # the cached model instead of re-fetching it every time.
+  # headroom:
+  #   image: "ghcr.io/chopratejas/headroom@sha256:1f4f12b4e13da3cae33cafeb2a8f4017a2b8be63566538e5fc2b8d1e45a83ee0"
+  #   ports:
+  #     - "8787:8787"
+  #   command: ["--memory", "--learn"]
+  #   volumes:
+  #     - headroom_cache:/root/.cache
+  #     - headroom_memory:/root/.headroom
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8787/health"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 60
+  #     start_period: 60s

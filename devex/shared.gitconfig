@@ -1,0 +1,16 @@
+[init]
+  defaultBranch = main
+
+[push]
+  autoSetupRemote = true
+  followTags = true
+
+[core]
+  hooksPath = devex/scripts/src/git-hooks
+
+[alias]
+  s = !git status
+  latest = !git fetch && git checkout origin/main && git checkout -b
+  reset-branch = !git reset $(git merge-base origin/main $(git branch --show-current))
+  sync = !git pull --autostash --rebase origin main && git push --force-with-lease
+  rebase-main = !BRANCH=$(git branch --show-current) && git fetch origin && git rebase HEAD origin/main && git push origin HEAD:main && git checkout $BRANCH

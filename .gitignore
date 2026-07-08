@@ -1,0 +1,18 @@
+node_modules
+dist
+output
+.claude/scheduled_tasks.lock.direnv/
+.direnv
+*.tsbuildinfo
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+
+# Personal Pulumi stack files (per-dev kind clusters). Shared-stack files
+# like Pulumi.dev--main.yaml / Pulumi.prod--main.yaml SHOULD be committed
+# so everyone has the same encryptionsalt for stack-level secrets.
+Pulumi.*.yaml
+devex/generated/**/src
+devops/crds/generated/crds2pulumi/src
+.serena

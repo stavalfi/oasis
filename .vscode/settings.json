@@ -1,0 +1,140 @@
+{
+  "claudeCode.initialPermissionMode": "auto",
+
+  // ── Format on save, but no global default formatter — each language has
+  // an explicit per-extension binding below so there's no ambiguity.
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  // `source.fixAll` triggers every extension's fix-all action (oxc, taplo,
+  // editorconfig, …). `source.organizeImports` lets oxc/taplo reorder.
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "always",
+    "source.organizeImports": "always"
+  },
+
+  // ── oxc (oxlint + oxfmt) ───────────────────────────────────────────────
+  // VS Code launched from the desktop has no `node` on PATH (it lives in
+  // the Nix dev shell). Point at the actual shims (not the .bin symlinks);
+  // paths ending in `<name>/bin/<name>` make the oxc extension use
+  // `node <shim> --lsp` instead of executing the shebang. `oxc.path.node`
+  // is a wrapper that resolves Node via `direnv exec` from the flake.
+  "oxc.enable": true,
+  "oxc.enable.oxlint": true,
+  "oxc.enable.oxfmt": true,
+  "oxc.lint.run": "onType",
+  "oxc.path.oxfmt": "node_modules/oxfmt/bin/oxfmt",
+  "oxc.path.oxlint": "node_modules/oxlint/bin/oxlint",
+  "oxc.path.node": "devex/vscode-nix-fixes/node",
+  "[javascript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[javascriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[json]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+
+  // ── shellcheck + shfmt for shell scripts ───────────────────────────────
+  // Use the direnv-wrapped binaries from the Nix dev shell. The shellcheck
+  // extension supports `${workspaceFolder}` substitution in executablePath
+  // (confirmed in vscode-shellcheck issue #767). `useWorkspaceRootAsCwd`
+  // ensures `--rcfile=devex/...` resolves against the repo root.
+  "shellcheck.enable": true,
+  "shellcheck.run": "onType",
+  "shellcheck.executablePath": "${workspaceFolder}/devex/vscode-nix-fixes/shellcheck",
+  "shellcheck.useWorkspaceRootAsCwd": true,
+  "shellcheck.customArgs": ["--rcfile=devex/configs/src/shellcheckrc"],
+  "shfmt.executablePath": "${workspaceFolder}/devex/vscode-nix-fixes/shfmt",
+  "[shellscript]": { "editor.defaultFormatter": "mkhl.shfmt" },
+
+  // ── taplo for TOML ─────────────────────────────────────────────────────
+  // Replace EBT's bundled @taplo/lsp@0.8.0 with the nix-shell taplo 0.10.
+  // EBT does NOT substitute `${workspaceFolder}` in `taplo.path` (verified
+  // in its source — raw config.get() read), but Node's child_process.spawn
+  // resolves a path containing `/` relative to the parent's CWD, and
+  // VSCode's extension host CWD == the workspace folder when one is open
+  // (verified against /proc/<pid>/cwd). So a bare workspace-relative path
+  // works for every developer with no `${workspaceFolder}` substitution or
+  // hardcoded absolute paths.
+  //
+  // The wrapper at `_via-direnv` reseeds PATH with the standard NixOS
+  // locations + generic Unix fallbacks before invoking `direnv exec`, so
+  // it survives the stripped env VSCode hands to extension-host children.
+  "evenBetterToml.taplo.bundled": false,
+  "evenBetterToml.taplo.path": "./devex/vscode-nix-fixes/taplo",
+  "evenBetterToml.formatter.alignEntries": false,
+  "[toml]": { "editor.defaultFormatter": "tamasfe.even-better-toml" },
+  // Short cache so schema edits show up without needing a window reload.
+  "evenBetterToml.schema.cache.memoryExpiration": 5,
+  "evenBetterToml.schema.cache.diskExpiration": 5,
+
+  // ── YAML ───────────────────────────────────────────────────────────────
+  // Format: oxfmt (via oxc.oxc-vscode). Disable redhat-yaml's own formatter
+  // to avoid two extensions racing on save.
+  // Lint: yamllint via fnando.linter (reads ./.yamllint).
+  // Schema: redhat.vscode-yaml reads `# yaml-language-server: $schema=...`
+  // modelines. SchemaStore disabled — only files with an explicit modeline
+  // get schema diagnostics.
+  "[yaml]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "yaml.format.enable": false,
+  "yaml.validate": true,
+  "yaml.schemaStore.enable": false,
+
+  // fnando.linter runs `yamllint` as a subprocess. VS Code launched from
+  // the desktop has no nix-shell PATH; override the command to use the
+  // direnv wrapper. Other defaults (config file lookup, ignore-line) stay.
+  "linter.linters": {
+    "yamllint": {
+      "command": [
+        "${workspaceFolder}/devex/vscode-nix-fixes/yamllint",
+        "--format",
+        "parsable",
+        ["$config", "--config-file", "$config"],
+        "-"
+      ]
+    }
+  },
+
+  // ── Terraform / OpenTofu ──────────────────────────────────────────────
+  // Use the direnv wrapper so VS Code (launched from the desktop) finds the
+  // Nix-shell terraform-ls binary. terraform-ls calls `terraform` which
+  // resolves via devex/shell-aliases/terraform → tofu (also nix-managed).
+  "terraform.languageServer.path": "${workspaceFolder}/devex/vscode-nix-fixes/terraform-ls",
+  "[terraform]": { "editor.defaultFormatter": "hashicorp.terraform" },
+  "[terraform-vars]": { "editor.defaultFormatter": "hashicorp.terraform" },
+
+  // ── editorconfig (applies indent/EOL/charset to everything via spec) ───
+  // No per-language binding needed; the extension activates automatically
+  // on workspaces containing .editorconfig.
+
+  // ── File associations ──────────────────────────────────────────────────
+  "files.associations": {
+    ".vscode/keybindings.json": "jsonc",
+    "keybindings.json": "jsonc"
+  },
+
+  // ── General editor / UX ────────────────────────────────────────────────
+  "files.autoSave": "afterDelay",
+  "explorer.confirmDelete": false,
+
+  // ── Terminal ───────────────────────────────────────────────────────────
+  "terminal.integrated.fontFamily": "MesloLGS Nerd Font",
+  "terminal.integrated.scrollback": 999999,
+  "terminal.integrated.commandsToSkipShell": [
+    "workbench.action.toggleAuxiliaryBar",
+    "workbench.action.terminal.clear",
+    "workbench.action.toggleSidebarVisibility",
+    "workbench.action.navigateBack",
+    "workbench.action.navigateForward"
+  ],
+
+  // ── JSON schemas ───────────────────────────────────────────────────────
+  "json.schemaDownload.trustedDomains": {
+    "https://schemastore.azurewebsites.net/": true,
+    "https://raw.githubusercontent.com/microsoft/vscode/": true,
+    "https://raw.githubusercontent.com/devcontainers/spec/": true,
+    "https://www.schemastore.org/": true,
+    "https://json.schemastore.org/": true,
+    "https://json-schema.org/": true,
+    "https://developer.microsoft.com/json-schemas/": true,
+    "https://biomejs.dev": true
+  }
+}

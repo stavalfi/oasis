@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/poc/devex/configs/yaml-schemas/yamllint.schema.json",
+  "title": "yamllint configuration",
+  "description": "Schema for yamllint configuration files (.yamllint, .yamllint.yaml, .yamllint.yml). See https://yamllint.readthedocs.io/en/stable/configuration.html",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "extends": {
+      "description": "Inherit from a built-in preset ('default' or 'relaxed') or a path to another config file.",
+      "type": "string"
+    },
+    "rules": {
+      "description": "Per-rule configuration. Each key is a yamllint rule name.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/rule" },
+      "properties": {
+        "anchors": { "$ref": "#/definitions/rule" },
+        "braces": { "$ref": "#/definitions/rule" },
+        "brackets": { "$ref": "#/definitions/rule" },
+        "colons": { "$ref": "#/definitions/rule" },
+        "commas": { "$ref": "#/definitions/rule" },
+        "comments": { "$ref": "#/definitions/rule" },
+        "comments-indentation": { "$ref": "#/definitions/rule" },
+        "document-end": { "$ref": "#/definitions/rule" },
+        "document-start": { "$ref": "#/definitions/rule" },
+        "empty-lines": { "$ref": "#/definitions/rule" },
+        "empty-values": { "$ref": "#/definitions/rule" },
+        "float-values": { "$ref": "#/definitions/rule" },
+        "hyphens": { "$ref": "#/definitions/rule" },
+        "indentation": { "$ref": "#/definitions/rule" },
+        "key-duplicates": { "$ref": "#/definitions/rule" },
+        "key-ordering": { "$ref": "#/definitions/rule" },
+        "line-length": { "$ref": "#/definitions/rule" },
+        "new-line-at-end-of-file": { "$ref": "#/definitions/rule" },
+        "new-lines": { "$ref": "#/definitions/rule" },
+        "octal-values": { "$ref": "#/definitions/rule" },
+        "quoted-strings": { "$ref": "#/definitions/rule" },
+        "trailing-spaces": { "$ref": "#/definitions/rule" },
+        "truthy": { "$ref": "#/definitions/rule" }
+      }
+    },
+    "ignore": {
+      "description": "Glob patterns of files/dirs to skip. Multi-line string or list.",
+      "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+    },
+    "ignore-from-file": {
+      "description": "Path to a gitignore-style file listing patterns to skip.",
+      "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+    },
+    "yaml-files": {
+      "description": "File globs to treat as YAML when running yamllint on a directory.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "locale": {
+      "description": "Locale for messages (e.g., 'en_US.UTF-8').",
+      "type": "string"
+    }
+  },
+  "definitions": {
+    "rule": {
+      "description": "A rule value is either the literal 'enable'/'disable', or an object with rule-specific options.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["enable", "disable"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "level": {
+              "description": "Severity. Defaults to 'error'.",
+              "enum": ["error", "warning"]
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    }
+  }
+}

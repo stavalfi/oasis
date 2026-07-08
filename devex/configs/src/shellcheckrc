@@ -1,0 +1,6 @@
+# Enable all optional rules — strict mode.
+enable=all
+# Follow `source ./foo.sh` directives and lint the sourced files too.
+external-sources=true
+# Resolve sourced paths relative to the directory of the script being checked.
+source-path=SCRIPTDIR

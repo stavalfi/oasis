@@ -1,0 +1,20 @@
+#:schema https://www.schemastore.org/taplo.json
+
+# Taplo workspace config — read by both the CLI (`taplo lint`/`taplo format`)
+# and the Even Better TOML VSCode extension. The in-file `#:schema` directive
+# also works in the CLI, but the EBT extension setting
+# `evenBetterToml.schema.associations` requires *absolute* URIs which breaks
+# across machines — so we centralize schema mapping here instead, with
+# workspace-relative paths that resolve identically for every developer.
+#
+# `schema.path` is for filesystem paths (relative to THIS file's directory);
+# `schema.url` is for full URLs (http(s):// or file://). They are NOT
+# interchangeable — `url` rejects bare relative paths.
+
+[[rule]]
+include = ["**/rauthy-config.toml"]
+schema.path = "devex/configs/toml-schemas/rauthy-config.schema.json"
+
+[[rule]]
+include = ["bunfig.toml"]
+schema.url = "https://www.schemastore.org/bunfig.json"

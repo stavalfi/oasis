@@ -1,0 +1,255 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "devex/scripts/src/generated/**",
+    "devex/scripts/src/oxc-linter-plugins/oxlint-plugin-poc-rules.ts",
+    "devex/scripts/test/lint/fixtures/**",
+    "devops/crds/generated/**"
+  ],
+  "jsPlugins": ["./devex/scripts/src/oxc-linter-plugins/oxlint-plugin-poc-rules.ts"],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "node", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "error",
+    "nursery": "error"
+  },
+  "rules": {
+    "import/consistent-type-specifier-style": ["error", "prefer-inline"],
+    "import/no-dynamic-require": ["error", { "esmodule": true }],
+    "poc-rules/no-anonymous-functions": "error",
+    "poc-rules/no-zod-passthrough": "error",
+    "poc-rules/require-access-modifiers": "error",
+    "poc-rules/require-object-params": "error",
+    "poc-rules/no-curl": [
+      "error",
+      {
+        "execFunctions": ["execFile", "execFileAsync", "spawn", "execAsync", "spawnAsync"],
+        "groups": [
+          {
+            "commands": ["curl", "wget"],
+            "message": "Shelling out to curl/wget is banned. Vendor the upstream service's OpenAPI spec to devex/configs/<svc>-openapi.json, generate a typed client (bunx @hey-api/openapi-ts), and use devex/scripts/src/generated/ instead."
+          },
+          {
+            "commands": ["keepassxc-cli"],
+            "message": "use secret-tool instead to avoid entering password manually"
+          }
+        ]
+      }
+    ],
+    "poc-rules/no-tsconfig-emit": [
+      "error",
+      {
+        "exclude": [
+          "devex/bookmark-sync-chrome-extention/extention",
+          "devops/crds/generated/",
+          "libs"
+        ]
+      }
+    ],
+    "no-restricted-globals": [
+      "error",
+      {
+        "name": "fetch",
+        "message": "Direct fetch() is banned. Vendor the upstream service's OpenAPI spec to `devex/configs/<svc>-openapi.json`, generate a typed client (`bunx @hey-api/openapi-ts`), and call its operations instead. The only place `fetch` is allowed is inside the generated `devex/scripts/src/generated/**` directory (already excluded via `ignorePatterns`)."
+      }
+    ],
+    "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }],
+    "unicorn/filename-case": ["error", { "case": "kebabCase" }],
+    "unicorn/no-process-exit": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/prefer-readonly": "error",
+    "no-ternary": "off",
+    "sort-imports": "off",
+    "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": [
+      "error",
+      { "max": 500, "skipBlankLines": true, "skipComments": true }
+    ],
+    "new-cap": "error",
+    "func-style": "error",
+    "no-negated-condition": "error",
+    "no-template-curly-in-string": "error",
+    "unicorn/no-negated-condition": "error",
+    "unicorn/consistent-function-scoping": "error",
+    "unicorn/no-await-expression-member": "error",
+    "unicorn/import-style": "error",
+    "import/group-exports": "off",
+    "no-promise-executor-return": "error",
+    "no-underscore-dangle": "error",
+    "max-params": "error",
+    "no-magic-numbers": "off",
+    "id-length": "off",
+    "max-statements": "off",
+    "no-await-in-loop": "off",
+    "no-continue": "error",
+    "no-unused-expressions": "error",
+    "no-duplicate-imports": "error",
+    "prefer-destructuring": "error",
+    "require-unicode-regexp": "error",
+    "require-await": "error",
+    "no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^$", "caughtErrorsIgnorePattern": "^$", "varsIgnorePattern": "^$" }
+    ],
+    "class-methods-use-this": "error",
+    "max-classes-per-file": ["error", 1],
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "Promise",
+        "property": "resolve",
+        "message": "Don't use Promise.resolve — restructure to await directly or call the sync function inline."
+      }
+    ],
+    "poc-rules/no-private-keyword": "error",
+    "poc-rules/no-process-stream-write": "error",
+    "poc-rules/no-protected": "error",
+    "unicorn/no-null": "error",
+    "promise/param-names": "error",
+    "no-inline-comments": "off",
+    "init-declarations": "off",
+    "no-undef": "off",
+    "no-undefined": "off",
+    "import/no-nodejs-modules": "off",
+    "import/no-default-export": "error",
+    "import/no-named-export": "off",
+    "import/prefer-default-export": "off",
+    "promise/avoid-new": "off",
+    "unicorn/number-literal-case": "off",
+    "capitalized-comments": "off",
+    "func-name-matching": "error",
+    "prefer-named-capture-group": "error",
+    "import/exports-last": "off",
+    "no-lonely-if": "error",
+    "promise/prefer-await-to-callbacks": "error",
+    "promise/prefer-await-to-then": "error",
+    "sort-keys": "error",
+    "unicorn/numeric-separators-style": "error",
+    "unicorn/no-hex-escape": "error",
+    "unicorn/no-array-callback-reference": "error",
+    "typescript/explicit-function-return-type": "error",
+    "typescript/no-namespace": "error",
+    "unicorn/prefer-ternary": "off",
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": [
+              "node:child_process",
+              "node:fs",
+              "node:fs/*",
+              "node:zlib",
+              "node:dns",
+              "node:crypto"
+            ],
+            "importNamePattern": "^.*Sync$",
+            "message": "Synchronous Node I/O blocks the event loop. Use the async variant."
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "builtin": true,
+    "node": true,
+    "es2024": true,
+    "browser": true
+  },
+  "overrides": [
+    {
+      "files": ["devex/configs/src/lint-staged.config.ts"],
+      "rules": {
+        "import/no-default-export": "off"
+      }
+    },
+    {
+      "files": ["devops/infra/src/resources/rauthy.ts", "devops/matrix/src/resources/rauthy.ts"],
+      "rules": {
+        "unicorn/no-null": "off"
+      }
+    },
+    {
+      "files": ["devex/scripts/src/cli/devops/**/*.ts"],
+      "rules": {
+        "poc-rules/no-banned-words": [
+          "error",
+          {
+            "groups": [
+              {
+                "message": "Do not use docker or podman here. Use terraform",
+                "words": ["docker", "podman"]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["libs/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@pulumi/*"],
+                "message": "libs/ must not import Pulumi packages. Pulumi types and resources belong in devops/."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["devops/**/*.ts", "devex/**/*.ts", "apps/**/*.ts"],
+      "rules": {
+        "poc-rules/no-global-functions": "error",
+        "typescript/no-extraneous-class": "off"
+      }
+    },
+    {
+      "files": ["devops/infra/src/config/envs/**/*.ts", "devops/matrix/src/config/envs/**/*.ts"],
+      "rules": {
+        "poc-rules/no-global-functions": "off"
+      }
+    },
+    {
+      "files": ["devops/**/*.ts"],
+      "rules": {
+        "sort-keys": "off",
+        "no-new": "off",
+        "typescript/no-extraneous-class": "off",
+        "import/max-dependencies": "off",
+        "poc-rules/no-custom-resource": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/devex/**", "devex/**"],
+                "message": "devops/ must not import from devex/. devops is the Pulumi infra deploy graph — keep dev-only tooling (scripts, generated SDKs, chrome extensions) out of it so the prod-relevant code stays self-contained and reviewable in isolation."
+              },
+              {
+                "group": [
+                  "node:child_process",
+                  "node:fs",
+                  "node:fs/*",
+                  "node:zlib",
+                  "node:dns",
+                  "node:crypto"
+                ],
+                "importNamePattern": "^.*Sync$",
+                "message": "Synchronous Node I/O blocks the event loop. Use the async variant."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

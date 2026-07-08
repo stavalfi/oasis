@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=devex/configs/yaml-schemas/yamllint.schema.json
+# yamllint config. Disable rules that overlap with oxfmt (which owns
+# layout). Keep semantic checks that catch real bugs.
+extends: default
+
+# yamllint does not honor .gitignore by default — pull patterns from it.
+ignore-from-file: .gitignore
+
+rules:
+  # Layout rules — owned by oxfmt
+  indentation: disable
+  comments-indentation: disable
+  trailing-spaces: disable
+  empty-lines: disable
+  line-length: disable
+  document-start: disable
+
+  # Semantic checks — keep
+  key-duplicates: enable
+  truthy:
+    check-keys: false

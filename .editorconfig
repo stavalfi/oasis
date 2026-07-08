@@ -1,0 +1,24 @@
+root = true
+
+# Scoped only to shell files — picked up by `shfmt` automatically.
+# Other languages (TS/JSON) are formatted by oxfmt and not affected.
+
+[*.{sh,bash}]
+indent_style = space
+indent_size = 2
+space_redirects = true
+
+[devex/scripts/src/git-hooks/**]
+indent_style = space
+indent_size = 2
+space_redirects = true
+
+[devex/shell-aliases/*]
+indent_style = space
+indent_size = 2
+space_redirects = true
+
+[devex/vscode-nix-fixes/*]
+indent_style = space
+indent_size = 2
+space_redirects = true

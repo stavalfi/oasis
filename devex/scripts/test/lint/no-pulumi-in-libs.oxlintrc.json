@@ -1,0 +1,16 @@
+{
+  "ignorePatterns": ["fixtures/**"],
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@pulumi/*"],
+            "message": "libs/ must not import Pulumi packages. Pulumi types and resources belong in devops/."
+          }
+        ]
+      }
+    ]
+  }
+}
