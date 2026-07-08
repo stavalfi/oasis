@@ -2,7 +2,6 @@ import { Command } from "@commander-js/extra-typings";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { DevexCommand } from "./devex/index.ts";
-import { DevopsCommand } from "./devops/index.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,10 +19,7 @@ class Cli {
     const repoRoot = rootOut.trim();
 
     const program = new Command().name("devex").description("DevEx developer tooling CLI");
-    new DevopsCommand({
-      repoRoot,
-      signal: this.#controller.signal,
-    }).register(program);
+
     new DevexCommand({ repoRoot, signal: this.#controller.signal }).register(program);
 
     await program.parseAsync(process.argv);

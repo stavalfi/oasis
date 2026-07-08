@@ -42,11 +42,7 @@
     "poc-rules/no-tsconfig-emit": [
       "error",
       {
-        "exclude": [
-          "devex/bookmark-sync-chrome-extention/extention",
-          "devops/crds/generated/",
-          "libs"
-        ]
+        "exclude": ["devops/crds/generated/"]
       }
     ],
     "no-restricted-globals": [
@@ -183,22 +179,6 @@
               {
                 "message": "Do not use docker or podman here. Use terraform",
                 "words": ["docker", "podman"]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["libs/**/*.ts"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["@pulumi/*"],
-                "message": "libs/ must not import Pulumi packages. Pulumi types and resources belong in devops/."
               }
             ]
           }

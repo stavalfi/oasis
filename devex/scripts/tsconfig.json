@@ -4,5 +4,5 @@
     "composite": true
   },
   "include": ["src", "test"],
-  "references": [{ "path": "../generated/rauthy-0.35.2" }, { "path": "../../libs" }]
+  "references": [{ "path": "../generated/rauthy-0.35.2" }]
 }

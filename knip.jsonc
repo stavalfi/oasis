@@ -26,7 +26,6 @@
     // entry point right now, but we don't want them flagged on every
     // lint run. Re-evaluate when one of them gets activated (delete from
     // here so knip starts reporting it again).
-    "devex/bookmark-sync-chrome-extention/extention/src/**",
     "devex/scripts/src/run-services/**",
     "devex/scripts/src/shell-audit/**",
     "devex/scripts/src/podl.ts",
