@@ -72,6 +72,16 @@
     "@hono/node-server",
     "@hono/zod-validator",
     "inversify",
+    // IdentityHub backend/frontend — code lives under backend/ and frontend/,
+    // which are outside knip's project scope (devops/devex only), so knip can't
+    // see these static imports. Remove once knip scans those trees.
+    "deep-freeze-es6",
+    "ky",
+    "kysely",
+    "kysely-codegen",
+    "pg",
+    "@types/pg",
+    "devcert",
   ],
   "ignoreBinaries": [
     // Provided by the nix flake (not npm) — `jq` for JSON, `mc` for

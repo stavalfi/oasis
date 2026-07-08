@@ -2,7 +2,7 @@ node_modules
 dist
 output
 
-# Secrets — never commit. Only .env.example (placeholders) is tracked.
+# Secrets — never commit.
 .env
 .env.*
 !.env.example
