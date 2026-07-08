@@ -11,9 +11,14 @@ frontend only. The backend is in [docs/backend-design.md](./backend-design.md).
 - [Component tree](#component-tree)
 - [Redux state](#redux-state)
 - [Data flow](#data-flow)
+  - [Draft persistence](#draft-persistence)
 - [API calls](#api-calls)
 - [Styling](#styling)
-- [Product thinking](#product-thinking)
+- [Loading and slow requests](#loading-and-slow-requests)
+- [Form validation](#form-validation)
+- [Error taxonomy](#error-taxonomy)
+- [Intuitive interactions](#intuitive-interactions)
+- [Product-thinking through-line](#product-thinking-through-line)
 
 ## Stack
 
@@ -33,7 +38,8 @@ frontend/src/
   components/   shared UI (ProjectPicker, CreateFindingForm, RecentTicketsList).
   store/        Redux store, slices, and async thunks.
   api/          typed Hono RPC client (hc<AppType>).
-  main.tsx      entry point.
+  index.html    HTML shell; Bun serves and bundles from it.
+  main.tsx      entry point, loaded by index.html.
 ```
 
 ## Responsibilities and non-goals
@@ -59,7 +65,7 @@ Does not:
 | `/`                  | DashboardPage | Project picker, create form, recent tickets |
 | `/settings/api-keys` | ApiKeysPage   | Create and revoke API keys                  |
 
-Unauthenticated access to `/` or `/settings` redirects to `/login`.
+Unauthenticated access to any route other than `/login` redirects to `/login`.
 
 ## Component tree
 
@@ -85,7 +91,7 @@ One store, four slices.
 ```
 authSlice
   status: loggedOut | loggingIn | loggedIn
-  user:   { accountId, email } | null
+  user:   { accountId, email, siteUrl } | null
   error:  string | null
 
 projectsSlice
@@ -229,9 +235,10 @@ rather than alarming.
 
 ## Form validation
 
-Validation runs in two places with the same limits (from the backend config, so
-they never drift): live in the UI for feedback, and authoritatively on the
-backend for safety.
+Validation runs in two places with the same limits: live in the UI for feedback,
+and authoritatively on the backend for safety. The limits come from the backend
+(delivered with the field metadata on `GET /api/projects`), so the two sides
+never drift.
 
 Real-time UI validation:
 
@@ -256,15 +263,15 @@ Real-time UI validation:
 Every error is classified so the message says what happened, whose fault it is,
 and what to do next. The UI never shows a raw status code or JSON.
 
-| Case | Class | Message and behavior |
-|------|-------|----------------------|
-| Field invalid (length, required) | Your input | Inline, per field, live. Submit stays disabled. |
-| Missing project-required field | Your input | Name the field: "Severity is required for this project." |
-| Session expired (401) | Auto-recovered | No error shown. Silent redirect to re-login (see API calls). |
-| No permission / project gone (403/404) | Rare race | Should not happen (picker only lists creatable projects). If it does: "That project is no longer available", and refresh the project list. |
-| Jira rate limited (429) | System, auto | No error shown. Backend retries; UI shows the slow-request loading. |
-| Jira or network failed (502) | System, retry | "We couldn't reach Jira. Your finding was not created, please try again." Form stays filled. |
-| Unexpected (500) | System | "Something went wrong on our side. Please try again." with a request id for support. |
+| Case                                   | Class          | Message and behavior                                                                                                                       |
+| -------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Field invalid (length, required)       | Your input     | Inline, per field, live. Submit stays disabled.                                                                                            |
+| Missing project-required field         | Your input     | Name the field: "Severity is required for this project."                                                                                   |
+| Session expired (401)                  | Auto-recovered | No error shown. Silent redirect to re-login (see API calls).                                                                               |
+| No permission / project gone (403/404) | Rare race      | Should not happen (picker only lists creatable projects). If it does: "That project is no longer available", and refresh the project list. |
+| Jira rate limited (429)                | System, auto   | No error shown. Backend retries; UI shows the slow-request loading.                                                                        |
+| Jira or network failed (502)           | System, retry  | "We couldn't reach Jira. Your finding was not created, please try again." Form stays filled.                                               |
+| Unexpected (500)                       | System         | "Something went wrong on our side. Please try again." with a request id for support.                                                       |
 
 The split is deliberate: "your input" errors are fixable by the user and are
 shown inline and immediately; "system" errors are not the user's fault and offer

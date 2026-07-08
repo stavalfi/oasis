@@ -120,35 +120,35 @@ Configuration:
 
 Environment-derived values (validated by the Zod schema, no defaults; required):
 
-| Name | Description | Type | Default |
-|------|-------------|------|---------|
-| JIRA_CLIENT_ID | Atlassian OAuth app client id | string | required |
-| JIRA_CLIENT_SECRET | Atlassian OAuth app client secret | string | required |
-| OAUTH_CALLBACK_URL | OAuth redirect target | string | required |
-| ENCRYPTION_KEY | Symmetric key for field-level encryption | string | required |
-| PORT | Backend HTTP port | number | required |
-| POSTGRES_USER | Postgres username | string | required |
-| POSTGRES_PASSWORD | Postgres password | string | required |
-| POSTGRES_DB | Postgres database name | string | required |
-| POSTGRES_HOST | Postgres host | string | required |
-| POSTGRES_PORT | Postgres port | number | required |
-| REDIS_PASSWORD | Redis password | string | required |
-| REDIS_HOST | Redis host | string | required |
-| REDIS_PORT | Redis port | number | required |
+| Name               | Description                              | Type   | Default  |
+| ------------------ | ---------------------------------------- | ------ | -------- |
+| JIRA_CLIENT_ID     | Atlassian OAuth app client id            | string | required |
+| JIRA_CLIENT_SECRET | Atlassian OAuth app client secret        | string | required |
+| OAUTH_CALLBACK_URL | OAuth redirect target                    | string | required |
+| ENCRYPTION_KEY     | Symmetric key for field-level encryption | string | required |
+| PORT               | Backend HTTP port                        | number | required |
+| POSTGRES_USER      | Postgres username                        | string | required |
+| POSTGRES_PASSWORD  | Postgres password                        | string | required |
+| POSTGRES_DB        | Postgres database name                   | string | required |
+| POSTGRES_HOST      | Postgres host                            | string | required |
+| POSTGRES_PORT      | Postgres port                            | number | required |
+| REDIS_PASSWORD     | Redis password                           | string | required |
+| REDIS_HOST         | Redis host                               | string | required |
+| REDIS_PORT         | Redis port                               | number | required |
 
 Constant values (hard-coded in `config.ts`, not from the environment):
 
-| Name | Description | Type | Default |
-|------|-------------|------|---------|
-| constants.recentTicketsLimit | Max tickets in the Recent Tickets view | number | 10 |
-| constants.cache.meAndProjectsTtlSeconds | Cache TTL for /api/me and /api/projects | number (s) | 300 |
-| constants.cache.recentTicketsTtlSeconds | Cache TTL for recent tickets | number (s) | 10 |
-| constants.sessionTtlSeconds | Session lifetime | number (s) | 43200 (12h) |
-| constants.apiKeyExpiryDays | API key lifetime | number (days) | 90 |
-| constants.validation.titleMaxLength | Max title (Jira summary) length | number | 255 |
-| constants.validation.descriptionMaxLength | Max description length | number | 32767 |
-| postgres.poolMin | Postgres pool min connections | number | 10 |
-| postgres.poolMax | Postgres pool max connections | number | 10 |
+| Name                                      | Description                             | Type          | Default     |
+| ----------------------------------------- | --------------------------------------- | ------------- | ----------- |
+| constants.recentTicketsLimit              | Max tickets in the Recent Tickets view  | number        | 10          |
+| constants.cache.meAndProjectsTtlSeconds   | Cache TTL for /api/me and /api/projects | number (s)    | 300         |
+| constants.cache.recentTicketsTtlSeconds   | Cache TTL for recent tickets            | number (s)    | 10          |
+| constants.sessionTtlSeconds               | Session lifetime                        | number (s)    | 43200 (12h) |
+| constants.apiKeyExpiryDays                | API key lifetime                        | number (days) | 90          |
+| constants.validation.titleMaxLength       | Max title (Jira summary) length         | number        | 255         |
+| constants.validation.descriptionMaxLength | Max description length                  | number        | 32767       |
+| postgres.poolMin                          | Postgres pool min connections           | number        | 10          |
+| postgres.poolMax                          | Postgres pool max connections           | number        | 10          |
 
 Comment conventions:
 
@@ -229,12 +229,12 @@ live only on the backend. The browser holds only an opaque session cookie.
 
 Session renewal alternatives considered:
 
-| Approach | How a returning user stays logged in | Decision |
-|----------|--------------------------------------|----------|
-| Rolling session (extend `expires_at` by the TTL on each request) | Active use keeps the same session alive; only inactivity expires it | Chosen |
-| Fixed-TTL session, re-OAuth on expiry | Session expires at a hard 12h; expiry triggers a silent OAuth re-login that also mints new Jira tokens | Not chosen (re-runs OAuth and mints tokens unnecessarily) |
-| Persistent-login token (rotating refresh-token pattern for our own session) | A separate long-lived token renews the session locally, no OAuth, with reuse detection | Not doing (production upgrade; adds a second credential, rotation, reuse detection) |
-| JWT session (claims in the browser) | Stateless validation, no lookup | Not chosen (weakens revocation, puts claims in the browser) |
+| Approach                                                                    | How a returning user stays logged in                                                                   | Decision                                                                            |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Rolling session (extend `expires_at` by the TTL on each request)            | Active use keeps the same session alive; only inactivity expires it                                    | Chosen                                                                              |
+| Fixed-TTL session, re-OAuth on expiry                                       | Session expires at a hard 12h; expiry triggers a silent OAuth re-login that also mints new Jira tokens | Not chosen (re-runs OAuth and mints tokens unnecessarily)                           |
+| Persistent-login token (rotating refresh-token pattern for our own session) | A separate long-lived token renews the session locally, no OAuth, with reuse detection                 | Not doing (production upgrade; adds a second credential, rotation, reuse detection) |
+| JWT session (claims in the browser)                                         | Stateless validation, no lookup                                                                        | Not chosen (weakens revocation, puts claims in the browser)                         |
 
 Chosen: rolling session. It gives "come back later and still be logged in" for
 active users with no extra credential, and expiry is enforced server-side by
@@ -264,15 +264,15 @@ Encryption key: one symmetric app key from an environment variable for the POC.
 
 Isolation and encryption techniques, and where we draw the line:
 
-| Technique | What it stops | Decision |
-|-----------|---------------|----------|
-| Strict scoping (every query filters by `user_id`, enforced at the models choke point) | Cross-tenant reads via queries | Chosen |
-| Row-Level Security (Postgres policies) | Cross-tenant reads even if a query forgets to scope | Not doing (needs connection/transaction state; conflicts with the stateless rule) |
-| Field-level encryption (encrypt tokens and API keys at rest) | A stolen database file or dump | Chosen |
-| Single app encryption key (from env) | Same as field-level, one shared key | Chosen for the POC |
-| Per-tenant keys (a key per tenant) | A bug returning another tenant's row (renders it undecryptable) | Not doing (future) |
-| Envelope encryption (data keys wrapped by a master key) | Managing many keys safely | Not doing (future) |
-| KMS (hardened master-key service) | The master key itself being stolen | Not doing (future) |
+| Technique                                                                             | What it stops                                                   | Decision                                                                          |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Strict scoping (every query filters by `user_id`, enforced at the models choke point) | Cross-tenant reads via queries                                  | Chosen                                                                            |
+| Row-Level Security (Postgres policies)                                                | Cross-tenant reads even if a query forgets to scope             | Not doing (needs connection/transaction state; conflicts with the stateless rule) |
+| Field-level encryption (encrypt tokens and API keys at rest)                          | A stolen database file or dump                                  | Chosen                                                                            |
+| Single app encryption key (from env)                                                  | Same as field-level, one shared key                             | Chosen for the POC                                                                |
+| Per-tenant keys (a key per tenant)                                                    | A bug returning another tenant's row (renders it undecryptable) | Not doing (future)                                                                |
+| Envelope encryption (data keys wrapped by a master key)                               | Managing many keys safely                                       | Not doing (future)                                                                |
+| KMS (hardened master-key service)                                                     | The master key itself being stolen                              | Not doing (future)                                                                |
 
 The chosen set is standard for a POC: strict scoping at the models choke point
 plus encryption of the sensitive columns. The rest is production hardening for
@@ -307,7 +307,8 @@ configured into a scanner or CI system.
 - Rotation without downtime: create a new key, update the machine to use it,
   then revoke the old one. A user may hold more than one active key.
 - Revocation: `DELETE /api/api-keys/:id` deletes the row; the key stops working
-  immediately.
+  immediately. A revoked key no longer matches any stored hash, so it is
+  rejected as invalid.
 
 ## API surface
 
@@ -327,7 +328,7 @@ Internal browser API, unversioned because it ships with the frontend:
 | GET /auth/login                 | Start OAuth login                                                                    |
 | GET /auth/callback              | OAuth redirect target                                                                |
 | POST /auth/logout               | End the session                                                                      |
-| GET /api/me                     | Current user profile                                                                 |
+| GET /api/me                     | Current user profile and connected Jira site                                         |
 | GET /api/projects               | List creatable projects with their issue types and required fields (from createmeta) |
 | POST /api/tickets               | Create a ticket from the UI                                                          |
 | GET /api/tickets?projectKey=... | Recent tickets for a project (max 10)                                                |
@@ -362,7 +363,6 @@ Operational, unauthenticated:
 
 - Every request input (path params, query, body) is validated by schema at the
   route boundary, never hand-parsed.
-- Prefer Hono's native validator where it suffices; otherwise use Zod.
 - Because routes are declared with `@hono/zod-openapi`, one Zod schema per route
   validates the request, types it, and generates its OpenAPI entry. Validation,
   types, and docs come from the same source.
@@ -409,26 +409,28 @@ Generated client:
   `@hey-api/openapi-ts` (already a repo dependency). This gives typed operations
   for the endpoints we use (per-project createmeta `getCreateIssueMetaIssueTypes`
   and `getCreateIssueMetaIssueTypeId`, `searchProjects`, `createIssue`,
-  `getIssue`, `setIssueProperty`, `getCurrentUser`), with no hand-written request
-  code or response types. Verified present in the spec; the older bulk createmeta
-  is deprecated and not used.
+  `getIssue`), with no hand-written request code or response types. Verified
+  present in the spec; the older bulk createmeta is deprecated and not used.
 - `fetch` is not avoided; it is the native transport. We just do not write fetch
   calls or Jira types by hand.
 - Not covered by this spec: the OAuth token exchange
-  (`auth.atlassian.com/oauth/token`) and `accessible-resources`
-  (`api.atlassian.com`). Those are two small hand-written calls over the same
-  transport.
+  (`auth.atlassian.com/oauth/token`), `accessible-resources`, and the `/me`
+  identity call (both on `api.atlassian.com`). Those are three small
+  hand-written calls over the same transport.
 
 Rate limiting:
 
 - Jira Cloud returns HTTP 429 when a rate limit is exceeded (and some 503s),
   usually with a `Retry-After` header. We do not hand-roll retry logic.
 - The generated client is configured to use `ky` as its transport. `ky` retries,
-  honoring `Retry-After` on 429 and 503, otherwise exponential backoff with
-  jitter, capped at 4 retries (5 attempts total).
-- `ky` retries only idempotent methods by default (GET and similar), so our
-  create-issue `POST` is not blindly retried into duplicate tickets. This matches
-  Atlassian's guidance to retry only idempotent requests.
+  honoring `Retry-After` on 429 and 503, otherwise exponential backoff, capped
+  at 4 retries (5 attempts total).
+- `ky` retries only idempotent methods by default (GET and similar), so a `POST`
+  is never blindly retried into duplicate tickets. For the create-issue `POST`
+  we enable retry on 429 only: a rate-limited request was rejected before being
+  processed, so retrying it cannot create a duplicate. A `POST` is still never
+  retried on 5xx or network errors, where Jira may already have processed the
+  create, matching Atlassian's guidance.
 - If retries are exhausted, the Jira call fails and the caller gets 502 (or the
   create endpoint surfaces a clear "Jira is rate limiting, try again" message).
 - The `jira_api_requests_total` and `jira_api_duration_seconds` metrics record
@@ -477,9 +479,10 @@ Read path:
 
 1. Look in L1. If present and not expired, return it.
 2. Else look in Redis. If present, populate L1 and return it.
-3. Else read from the source (Jira for me and projects; the `tickets` table for
-   recent-ticket references plus a live Jira fetch for their current titles),
-   then write the result to Redis and L1, and return it.
+3. Else read from the source (the `users` and `jira_connections` tables for me;
+   Jira for projects; the `tickets` table for recent-ticket references plus a
+   live Jira fetch for their current titles), then write the result to Redis and
+   L1, and return it.
 
 Write path: on a write for `user_id` (and `project_key` where relevant), delete
 the related key in both L1 and Redis so the change appears immediately instead
@@ -528,21 +531,21 @@ below, labeled by `route` (and `method`). This gives, for each endpoint:
 A single middleware records both for every route, so a new endpoint is measured
 automatically with no per-route wiring.
 
-| Metric | Type | Labels (params) | Description |
-|--------|------|-----------------|-------------|
-| http_requests_total | counter | method, route, status | Per-endpoint call count (calls over time via rate()) |
-| http_request_duration_seconds | histogram | method, route, status | Per-endpoint request latency |
-| login_attempts_total | counter | result (success, denied, error) | OAuth logins started/finished |
-| session_active | gauge | (none) | Currently valid sessions |
-| api_key_auth_total | counter | result (valid, missing, invalid, expired, revoked) | Machine auth attempts |
-| tickets_created_total | counter | source (ui, api), result (success, failure) | Tickets created |
-| jira_api_requests_total | counter | operation (createmeta, projects, create_issue, get_issue, token, refresh), status | Calls to Atlassian |
-| jira_api_duration_seconds | histogram | operation | Atlassian call latency |
-| jira_token_refresh_total | counter | result (success, invalid_grant, error) | Access token refreshes |
-| cache_requests_total | counter | cache (me, projects, recent_tickets), tier (l1, l2), result (hit, miss) | Cache lookups |
-| db_query_duration_seconds | histogram | model, operation (select, insert, update, delete) | Postgres query latency |
-| db_pool_connections | gauge | state (active, idle) | Kysely pool usage |
-| redis_operations_total | counter | operation (get, set, del), result (ok, error) | Redis operations |
+| Metric                        | Type      | Labels (params)                                                                   | Description                                          |
+| ----------------------------- | --------- | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| http_requests_total           | counter   | method, route, status                                                             | Per-endpoint call count (calls over time via rate()) |
+| http_request_duration_seconds | histogram | method, route, status                                                             | Per-endpoint request latency                         |
+| login_attempts_total          | counter   | result (success, denied, error)                                                   | OAuth logins started/finished                        |
+| session_active                | gauge     | (none)                                                                            | Currently valid sessions                             |
+| api_key_auth_total            | counter   | result (valid, missing, invalid, expired)                                         | Machine auth attempts                                |
+| tickets_created_total         | counter   | source (ui, api), result (success, failure)                                       | Tickets created                                      |
+| jira_api_requests_total       | counter   | operation (createmeta, projects, create_issue, get_issue, token, refresh), status | Calls to Atlassian                                   |
+| jira_api_duration_seconds     | histogram | operation                                                                         | Atlassian call latency                               |
+| jira_token_refresh_total      | counter   | result (success, invalid_grant, error)                                            | Access token refreshes                               |
+| cache_requests_total          | counter   | cache (me, projects, recent_tickets), tier (l1, l2), result (hit, miss)           | Cache lookups                                        |
+| db_query_duration_seconds     | histogram | model, operation (select, insert, update, delete)                                 | Postgres query latency                               |
+| db_pool_connections           | gauge     | state (active, idle)                                                              | Kysely pool usage                                    |
+| redis_operations_total        | counter   | operation (get, set, del), result (ok, error)                                     | Redis operations                                     |
 
 ## Data model
 
@@ -575,36 +578,40 @@ Notes:
 
 ---
 
-# Login and token lifecycle flows
+## Login and token lifecycle flows
 
-## 1. First login ever
+### 1. First login ever
 
 ```mermaid
 sequenceDiagram
   participant Browser
   participant Backend
   participant DB
+  participant Redis
   participant Auth as auth.atlassian.com
   participant Jira as api.atlassian.com
 
   Browser->>Backend: GET /auth/login
-  Backend->>DB: store random state (CSRF)
+  Backend->>Redis: store random state (CSRF), short TTL
   Backend-->>Browser: 302 to authorize URL (client_id, scopes, redirect_uri, state)
   Browser->>Auth: GET /authorize
   Note over Browser,Auth: user logs in and clicks Allow (first time only)
   Auth-->>Browser: 302 /auth/callback?code&state
   Browser->>Backend: GET /auth/callback?code&state
-  Backend->>DB: verify state matches
+  Backend->>Redis: verify state matches (single use, then deleted)
   Backend->>Auth: POST /oauth/token (code + client_secret)
   Auth-->>Backend: access_token + refresh_token + expires_in
   Backend->>Jira: GET /oauth/token/accessible-resources
   Jira-->>Backend: cloud_id + site url
+  Backend->>Jira: GET /me
+  Jira-->>Backend: atlassian_account_id + email
+  Backend->>DB: upsert users row
   Backend->>DB: encrypt tokens, store jira_connections (user, cloud_id)
   Backend->>DB: create session (random session_id, expiry)
-  Backend-->>Browser: Set-Cookie session_id (HttpOnly, Secure, SameSite=Lax)
+  Backend-->>Browser: Set-Cookie session_id (HttpOnly, Secure, SameSite=Lax), 302 to /
 ```
 
-## 2. Second login (second tab, session still valid)
+### 2. Second login (second tab, session still valid)
 
 ```mermaid
 sequenceDiagram
@@ -619,32 +626,35 @@ sequenceDiagram
   Backend-->>Tab2: profile returned, app renders, Atlassian not involved
 ```
 
-## 3. Third login (backend session expired)
+### 3. Third login (backend session expired)
 
 ```mermaid
 sequenceDiagram
   participant Browser
   participant Backend
   participant DB
+  participant Redis
   participant Auth as auth.atlassian.com
 
   Browser->>Backend: GET /api/... (cookie session_id)
   Backend->>DB: look up session_id, expired
-  Backend-->>Browser: 401, redirect /auth/login
+  Backend-->>Browser: 401 (the frontend redirects to /auth/login)
   Browser->>Backend: GET /auth/login
-  Backend->>DB: store new random state (CSRF)
+  Backend->>Redis: store new random state (CSRF), short TTL
   Backend-->>Browser: 302 to authorize URL (state)
   Browser->>Auth: GET /authorize
   Note over Browser,Auth: Atlassian cookie still valid and already consented, silent, no prompt
   Auth-->>Browser: 302 /auth/callback?code&state
   Browser->>Backend: GET /auth/callback?code&state
+  Backend->>Redis: verify state matches (single use, then deleted)
   Backend->>Auth: POST /oauth/token (code + client_secret)
   Auth-->>Backend: new access_token + refresh_token
+  Backend->>DB: overwrite encrypted tokens (jira_connections)
   Backend->>DB: create NEW session
-  Backend-->>Browser: Set-Cookie new session_id
+  Backend-->>Browser: Set-Cookie new session_id, 302 to /
 ```
 
-## 4. Fourth login (Jira access token expired, session still valid)
+### 4. Fourth login (Jira access token expired, session still valid)
 
 ```mermaid
 sequenceDiagram
@@ -667,7 +677,7 @@ sequenceDiagram
   Note over Browser,Backend: fully transparent, no re-login
 ```
 
-## 5. Fifth login (refresh token expired, about 90 days)
+### 5. Fifth login (refresh token expired, about 90 days)
 
 ```mermaid
 sequenceDiagram
@@ -685,7 +695,7 @@ sequenceDiagram
   Note over Browser,Auth: full consent flow again, same as first login
 ```
 
-## 6. Machine caller (REST API, no session)
+### 6. Machine caller (REST API, no session)
 
 ```mermaid
 sequenceDiagram
@@ -696,19 +706,19 @@ sequenceDiagram
 
   Scanner->>Backend: POST /api/v1/findings (Bearer api_key, JSON)
   Backend->>Backend: validate input
-  Backend->>DB: hash api_key, find owner user, check not expired or revoked
+  Backend->>DB: hash api_key, find owner user (a revoked key has no row), check not expired
   alt invalid, missing, expired, or revoked key
     Backend-->>Scanner: 401 Unauthorized
   else valid
     Backend->>DB: read tenant tokens (decrypt)
     Backend->>Jira: POST issue (Bearer access_token)
     Jira-->>Backend: created (issue key)
-    Backend->>DB: record ticket for Recent Tickets view
+    Backend->>DB: record ticket, delete recent-tickets cache key
     Backend-->>Scanner: 201 Created {key, url}
   end
 ```
 
-## Logout
+### Logout
 
 ```mermaid
 sequenceDiagram
@@ -724,26 +734,26 @@ sequenceDiagram
 
 ---
 
-# Run locally
+## Run locally
 
 One command starts the backend, frontend, Postgres, and Redis. Required
-configuration lives in `.env` (see `.env.example`), which is gitignored.
+configuration lives in `.env` at the repo root, which is gitignored.
 
-| Variable           | Purpose                                              |
-| ------------------ | ---------------------------------------------------- |
-| JIRA_CLIENT_ID     | Atlassian OAuth app client id                        |
-| JIRA_CLIENT_SECRET | Atlassian OAuth app client secret                    |
-| OAUTH_CALLBACK_URL | `https://localhost:3000/auth/callback`               |
-| ENCRYPTION_KEY     | Symmetric key for field-level encryption             |
-| POSTGRES_USER      | Postgres username                                    |
-| POSTGRES_PASSWORD  | Postgres password                                    |
-| POSTGRES_DB        | Postgres database name                               |
-| POSTGRES_HOST      | Postgres host                                        |
-| POSTGRES_PORT      | Postgres port                                        |
-| REDIS_PASSWORD     | Redis password                                       |
-| REDIS_HOST         | Redis host                                           |
-| REDIS_PORT         | Redis port                                           |
-| PORT               | Backend port (default 3000)                          |
+| Variable           | Purpose                                     |
+| ------------------ | ------------------------------------------- |
+| JIRA_CLIENT_ID     | Atlassian OAuth app client id               |
+| JIRA_CLIENT_SECRET | Atlassian OAuth app client secret           |
+| OAUTH_CALLBACK_URL | `https://localhost:3000/auth/callback`      |
+| ENCRYPTION_KEY     | Symmetric key for field-level encryption    |
+| POSTGRES_USER      | Postgres username                           |
+| POSTGRES_PASSWORD  | Postgres password                           |
+| POSTGRES_DB        | Postgres database name                      |
+| POSTGRES_HOST      | Postgres host                               |
+| POSTGRES_PORT      | Postgres port                               |
+| REDIS_PASSWORD     | Redis password                              |
+| REDIS_HOST         | Redis host                                  |
+| REDIS_PORT         | Redis port                                  |
+| PORT               | Backend port; 3000 matches the callback URL |
 
 Postgres and Redis run from `devex/docker-compose.yml`, which reads these same
 variables. `config.ts` is the only code that reads them.
@@ -753,30 +763,32 @@ callback URL above and the scopes listed in Assumptions.
 
 ---
 
-# Scope decisions
+## Scope decisions
 
 The assignment lets us choose which Jira projects and fields to support. What we
 chose and why.
 
-| Area | Decision | Reason |
-|------|----------|--------|
-| Projects | Only projects the user can create issues in, from the per-project createmeta endpoints (`getCreateIssueMetaIssueTypes`, `getCreateIssueMetaIssueTypeId`) | `project/search` also returns browse-only projects that would 403 on create. The bulk `createmeta` is deprecated. |
-| Issue type | Always `Task`, validated per project, falling back to the project default if `Task` is absent | A finding maps to a task; no value in exposing Bug or Story. |
-| Base fields | Title to `summary`, Description to `description`, always shown | Required by the assignment; minimal and intuitive. |
-| Required fields | Every field the project marks required is rendered dynamically | So create never fails on a project that requires extra fields. |
-| Optional fields | A curated set shown only when the project exposes them: priority, labels, assignee, due date, components | Useful for a real finding without supporting every field. |
-| Field rendering | Text fields as inputs, enum fields (priority, selects) as dropdowns of their `allowedValues`, labels as a tag input | Driven by createmeta `required` flag and `allowedValues`. |
-| Marking app-created tickets | Our `tickets` table stores only issue keys we created (scoped by user; titles fetched live from Jira) plus a Jira label `identityhub-finding` | Table is the source of truth for the Recent view; the label is durable and survives a DB reset. |
-| Out of scope | Optional fields outside the curated set, arbitrary custom fields, editing/transitioning/deleting issues, attachments, JSM request types, subtasks, epics, links | Not needed for the POC. |
+| Area                        | Decision                                                                                                                                                        | Reason                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Projects                    | Only projects the user can create issues in, from the per-project createmeta endpoints (`getCreateIssueMetaIssueTypes`, `getCreateIssueMetaIssueTypeId`)        | `project/search` also returns browse-only projects that would 403 on create. The bulk `createmeta` is deprecated. |
+| Issue type                  | Always `Task`, validated per project, falling back to the first issue type the project allows if `Task` is absent                                               | A finding maps to a task; no value in exposing Bug or Story.                                                      |
+| Base fields                 | Title to `summary`, Description to `description`, always shown                                                                                                  | Required by the assignment; minimal and intuitive.                                                                |
+| Required fields             | Every field the project marks required is rendered dynamically                                                                                                  | So create never fails on a project that requires extra fields.                                                    |
+| Optional fields             | A curated set shown only when the project exposes them: priority, labels, assignee, due date, components                                                        | Useful for a real finding without supporting every field.                                                         |
+| Field rendering             | Text fields as inputs, enum fields (priority, selects) as dropdowns of their `allowedValues`, labels as a tag input                                             | Driven by createmeta `required` flag and `allowedValues`.                                                         |
+| Marking app-created tickets | Our `tickets` table stores only issue keys we created (scoped by user; titles fetched live from Jira) plus a Jira label `identityhub-finding`                   | Table is the source of truth for the Recent view; the label is durable and survives a DB reset.                   |
+| Out of scope                | Optional fields outside the curated set, arbitrary custom fields, editing/transitioning/deleting issues, attachments, JSM request types, subtasks, epics, links | Not needed for the POC.                                                                                           |
 
 ---
 
-# Assumptions and decisions
+## Assumptions and decisions
 
 - Atlassian OAuth 2.0 (3LO), Resource-level access, so each user token is scoped
   to the single site the user selects. Different users can be on different sites.
-- Granular Jira scopes: `write:issue:jira`, `read:issue:jira`,
-  `read:project:jira`, plus `read:me`, plus `offline_access` for refresh.
+- Jira scopes (classic, per the spec's security definitions for the operations
+  we call): `read:jira-work` (createmeta, project search, issue read) and
+  `write:jira-work` (issue create), plus `read:me` for the identity call on
+  `api.atlassian.com`, plus `offline_access` for refresh tokens.
 - One user equals one tenant equals one connected Jira site (see Tenancy model).
 - Recent Tickets shows only the acting user's app-created tickets from our own
   `tickets` table, filtered by selected project, capped at 10. Tickets created
@@ -785,4 +797,4 @@ chose and why.
   the scanner or CI system.
 - Callback URL for local run: `https://localhost:3000/auth/callback`.
 - Not built (documented as future work): per-tenant keys, envelope encryption,
-  KMS, OIDC federation for machine callers, rate limiting.
+  KMS, OIDC federation for machine callers, rate limiting of our own API.
