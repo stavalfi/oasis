@@ -16,7 +16,7 @@ export class DevexCommand {
     const devex = new Command("devex").description("DevEx tooling operations");
     new ClaudeSandboxCommand({ repoRoot: this.#repoRoot, signal: this.#signal }).register(devex);
     new CodegenCommand({ repoRoot: this.#repoRoot, signal: this.#signal }).register(devex);
-    new UpdateGdocCommand({ repoRoot: this.#repoRoot, signal: this.#signal }).register(devex);
+    new UpdateGdocCommand(this.#repoRoot).register(devex);
     parent.addCommand(devex);
   }
 }

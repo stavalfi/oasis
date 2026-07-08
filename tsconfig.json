@@ -41,7 +41,10 @@
   "exclude": ["node_modules", "dist"],
   "references": [
     { "path": "devex/generated/rauthy-0.35.2" },
+    { "path": "devex/generated/jira" },
     { "path": "devex/scripts" },
-    { "path": "devex/configs" }
+    { "path": "devex/configs" },
+    { "path": "backend" },
+    { "path": "frontend" }
   ]
 }

@@ -9,21 +9,23 @@
  */
 import { certificateFor } from "devcert";
 
-/** A TLS key/cert pair as strings, ready to pass to Bun.serve's `tls` option. */
+/** A TLS key/cert pair as strings, ready to pass to the server's `tls` option. */
 export interface TlsMaterial {
   cert: string;
   key: string;
 }
 
-/**
- * Return a locally-trusted key/cert pair for the given host (default
- * "localhost"). On first run devcert may prompt for sudo to install its root CA
- * into the system trust store.
- *
- * @param host - the hostname the certificate is issued for.
- * @returns the PEM-encoded private key and certificate as strings.
- */
-export const getLocalTls = async (host = "localhost"): Promise<TlsMaterial> => {
-  const { key, cert } = await certificateFor(host);
-  return { cert: cert.toString(), key: key.toString() };
-};
+export class Tls {
+  /**
+   * Return a locally-trusted key/cert pair for the given host (default
+   * "localhost"). On first run devcert may prompt for sudo to install its root
+   * CA into the system trust store.
+   *
+   * @param host - the hostname the certificate is issued for.
+   * @returns the PEM-encoded private key and certificate as strings.
+   */
+  public static async getLocal(host = "localhost"): Promise<TlsMaterial> {
+    const { key, cert } = await certificateFor(host);
+    return { cert: cert.toString(), key: key.toString() };
+  }
+}

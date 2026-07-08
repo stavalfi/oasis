@@ -4,7 +4,9 @@
     "devex/scripts/src/generated/**",
     "devex/scripts/src/oxc-linter-plugins/oxlint-plugin-poc-rules.ts",
     "devex/scripts/test/lint/fixtures/**",
-    "devops/crds/generated/**"
+    "devops/crds/generated/**",
+    "backend/src/db/schema.ts",
+    "devex/configs/jira-openapi-ts.config.mjs"
   ],
   "jsPlugins": ["./devex/scripts/src/oxc-linter-plugins/oxlint-plugin-poc-rules.ts"],
   "plugins": ["typescript", "unicorn", "oxc", "import", "node", "promise"],
@@ -42,7 +44,7 @@
     "poc-rules/no-tsconfig-emit": [
       "error",
       {
-        "exclude": ["devops/crds/generated/"]
+        "exclude": ["devops/crds/generated/", "backend/"]
       }
     ],
     "no-restricted-globals": [
@@ -57,6 +59,7 @@
     "unicorn/no-process-exit": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/no-explicit-any": "error",
+    "typescript/no-extraneous-class": "off",
     "typescript/prefer-readonly": "error",
     "no-ternary": "off",
     "sort-imports": "off",

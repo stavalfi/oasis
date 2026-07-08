@@ -31,6 +31,12 @@
     "devex/scripts/src/podl.ts",
     "devex/scripts/src/redirect-mapper-hook.ts",
     "devex/scripts/src/unt.ts",
+    // Parked CLI util, not wired to any entry point yet (same policy as the
+    // parked trees above).
+    "devex/scripts/src/cli/utils/port-parser.ts",
+    // Deliberately-invalid inputs for the custom lint-rule tests; they import
+    // packages that aren't project deps on purpose (also oxlint-ignored).
+    "devex/scripts/test/lint/fixtures/**",
     // Picked up by `lint-staged` at runtime via filename convention, not
     // statically imported anywhere — knip can't see the edge.
     "devex/configs/src/lint-staged.config.ts",
@@ -41,6 +47,8 @@
     "oxlint",
     "oxfmt",
     "prettier",
+    // Browser-automation tool for local/e2e use; not statically imported.
+    "playwright",
     // Used by the generated SDK (which itself is in `ignore` above).
     "@hey-api/client-fetch",
     // Invoked via `bunx @hey-api/openapi-ts` in codegen/rauthy-gen-types.ts — not a static import.
@@ -82,6 +90,18 @@
     "pg",
     "@types/pg",
     "devcert",
+    "@hono/zod-openapi",
+    "ioredis",
+    "cache-manager",
+    "keyv",
+    "@keyv/redis",
+    "react",
+    "react-dom",
+    "@reduxjs/toolkit",
+    "react-redux",
+    "react-router-dom",
+    "@types/react",
+    "@types/react-dom",
   ],
   "ignoreBinaries": [
     // Provided by the nix flake (not npm) — `jq` for JSON, `mc` for

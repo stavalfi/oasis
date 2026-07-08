@@ -22,7 +22,7 @@ This document covers the backend only. The UI is in
 - [REST API for machine callers](#rest-api-for-machine-callers)
 - [Jira client and rate limiting](#jira-client-and-rate-limiting)
 - [Caching](#caching)
-- [Observability (logs and metrics)](#observability-logs-and-metrics)
+- [Observability (logs)](#observability-logs)
 - [Data model](#data-model)
 - [Run locally](#run-locally)
 - [Login and token lifecycle flows](#login-and-token-lifecycle-flows)
@@ -38,9 +38,11 @@ This document covers the backend only. The UI is in
 
 ## Stack
 
-- Package manager and toolchain: Bun. Language: TypeScript.
-- Backend: Hono, with `@hono/zod-openapi` (Zod-validated routes that also emit
-  the OpenAPI spec and provide the RPC types) and `@hono/swagger-ui`.
+- Runtime: Node.js runs the backend (it strips TypeScript types natively, so the
+  `.ts` sources run without a build step). Bun is only the package manager and
+  the frontend bundler/runner. Language: TypeScript.
+- Backend: Hono, with `@hono/zod-openapi` so one Zod schema per route both
+  validates the request and types the handler.
 - Database: Postgres, accessed statelessly (see Multi-tenant isolation).
 - Cache: Redis, plus a per-process in-memory tier.
 - Database access: Kysely (type-safe query builder) with Kysely migrations.
@@ -67,7 +69,9 @@ backend/src/
   services/     business logic. Orchestrates models, redis, and the Jira client.
   models/       the ONLY code that talks to Postgres (via Kysely).
   redis/        the ONLY code that talks to Redis.
-  jira/         Atlassian client (token exchange, createmeta, issue create).
+  jira/         Atlassian client. A single `jira.ts` class is the ONLY code that
+                calls Atlassian (token exchange, accessible-resources, identity,
+                createmeta, issue create/read). Nothing else talks to Jira.
   db/
     migrations/ Kysely migration files.
     schema.ts   typed database schema for Kysely.
@@ -191,10 +195,9 @@ Authentication (who is calling):
   -> 401.
 - Machine routes (`/api/v1/*`) require a valid, non-expired, non-revoked API key
   -> 401 otherwise.
-- The only unauthenticated routes are operational and carry no tenant data:
-  `GET /` (SPA shell), `GET /health/live`, `GET /health/ready`, `GET /metrics`,
-  `GET /openapi.json`, `GET /docs`, and the login routes themselves
-  (`/auth/login`, `/auth/callback`).
+- The only unauthenticated routes carry no tenant data: `GET /` (the SPA shell,
+  served before JS loads) and the login routes themselves (`/auth/login`,
+  `/auth/callback`, and `POST /auth/logout`).
 
 Authorization (are they allowed this object):
 
@@ -342,7 +345,6 @@ Operational, unauthenticated:
 | ----------------- | ------------------------------------------- |
 | GET /openapi.json | OpenAPI spec (generated from route schemas) |
 | GET /docs         | Swagger UI                                  |
-| GET /metrics      | Prometheus metrics                          |
 | GET /health/live  | Liveness probe                              |
 | GET /health/ready | Readiness probe (checks Postgres and Redis) |
 
@@ -402,21 +404,31 @@ Operational, unauthenticated:
 The Jira REST client is generated, not hand-written, and rate-limit retry is
 handled by the transport, not by us.
 
+Single choke point: all Atlassian traffic goes through one class,
+`backend/src/jira/jira.ts` (`JiraClient`). Both the generated REST operations and
+the few hand-written OAuth calls are wrapped as methods on this one class, so
+every Jira call, its auth, and its transport are configured in a single
+auditable place. No other file calls Atlassian.
+
 Generated client:
 
-- Generated from Atlassian's Jira Cloud OpenAPI v3 spec
-  (`https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json`) with
-  `@hey-api/openapi-ts` (already a repo dependency). This gives typed operations
-  for the endpoints we use (per-project createmeta `getCreateIssueMetaIssueTypes`
-  and `getCreateIssueMetaIssueTypeId`, `searchProjects`, `createIssue`,
-  `getIssue`), with no hand-written request code or response types. Verified
-  present in the spec; the older bulk createmeta is deprecated and not used.
-- `fetch` is not avoided; it is the native transport. We just do not write fetch
-  calls or Jira types by hand.
+- Generated from Atlassian's Jira Cloud OpenAPI v3 spec with
+  `@hey-api/openapi-ts` (already a repo dependency). The spec is vendored to
+  `devex/configs/jira-openapi-v3.json`; the generation config
+  (`devex/configs/jira-openapi-ts.config.mjs`) filters it to only the operations
+  we call, and the output lands in `devex/generated/jira` (gitignored, produced
+  by `bun run codegen`, mirroring the existing rauthy client). This gives typed
+  operations for the endpoints we use (per-project createmeta
+  `getCreateIssueMetaIssueTypes` and `getCreateIssueMetaIssueTypeId`,
+  `searchProjects`, `createIssue`, `getIssue`), with no hand-written request code
+  or response types. The older bulk createmeta is deprecated and not used.
+- Direct `fetch` is banned repo-wide by lint; the generated client's transport is
+  overridden with `ky` (see Rate limiting). We do not write fetch calls or Jira
+  types by hand.
 - Not covered by this spec: the OAuth token exchange
   (`auth.atlassian.com/oauth/token`), `accessible-resources`, and the `/me`
   identity call (both on `api.atlassian.com`). Those are three small
-  hand-written calls over the same transport.
+  hand-written calls (also `ky`) that live as methods on the same `JiraClient`.
 
 Rate limiting:
 
@@ -433,8 +445,8 @@ Rate limiting:
   create, matching Atlassian's guidance.
 - If retries are exhausted, the Jira call fails and the caller gets 502 (or the
   create endpoint surfaces a clear "Jira is rate limiting, try again" message).
-- The `jira_api_requests_total` and `jira_api_duration_seconds` metrics record
-  outcomes, so 429s and retries are observable.
+- Retries and rate-limit responses are logged (with the request id), so 429s and
+  backoff are visible in the structured logs.
 
 ## Caching
 
@@ -498,7 +510,12 @@ flowchart TD
   Write[write endpoint] --> Inval[delete related key in L1 + Redis]
 ```
 
-## Observability (logs and metrics)
+## Observability (logs)
+
+Structured logs are the observability surface for this POC. Metrics
+(Prometheus/OpenTelemetry) are intentionally out of scope for a home assignment;
+they are the obvious production follow-up but add wiring that does not change the
+functional result here.
 
 ### Logs
 
@@ -513,39 +530,6 @@ flowchart TD
 - Log levels: `error` for handled failures and 5xx, `warn` for 4xx and auth
   rejections, `info` for lifecycle and request summaries, `debug` for detail
   behind a flag.
-
-### Metrics
-
-- Prometheus metrics exposed at `GET /metrics` (operational, unauthenticated).
-- Label cardinality is kept low: `route` is the templated path (`/api/tickets`,
-  not a concrete id), and `user_id` is never a label.
-
-Per-endpoint metrics: every exposed API is measured by the two `http_*` metrics
-below, labeled by `route` (and `method`). This gives, for each endpoint:
-
-- call count over time: `rate(http_requests_total{route="/api/tickets"}[5m])`
-- latency: quantiles from `http_request_duration_seconds` per route, for example
-  `histogram_quantile(0.95, sum by (le, route) (rate(http_request_duration_seconds_bucket[5m])))`
-- error rate: the same counter filtered by `status`
-
-A single middleware records both for every route, so a new endpoint is measured
-automatically with no per-route wiring.
-
-| Metric                        | Type      | Labels (params)                                                                   | Description                                          |
-| ----------------------------- | --------- | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| http_requests_total           | counter   | method, route, status                                                             | Per-endpoint call count (calls over time via rate()) |
-| http_request_duration_seconds | histogram | method, route, status                                                             | Per-endpoint request latency                         |
-| login_attempts_total          | counter   | result (success, denied, error)                                                   | OAuth logins started/finished                        |
-| session_active                | gauge     | (none)                                                                            | Currently valid sessions                             |
-| api_key_auth_total            | counter   | result (valid, missing, invalid, expired)                                         | Machine auth attempts                                |
-| tickets_created_total         | counter   | source (ui, api), result (success, failure)                                       | Tickets created                                      |
-| jira_api_requests_total       | counter   | operation (createmeta, projects, create_issue, get_issue, token, refresh), status | Calls to Atlassian                                   |
-| jira_api_duration_seconds     | histogram | operation                                                                         | Atlassian call latency                               |
-| jira_token_refresh_total      | counter   | result (success, invalid_grant, error)                                            | Access token refreshes                               |
-| cache_requests_total          | counter   | cache (me, projects, recent_tickets), tier (l1, l2), result (hit, miss)           | Cache lookups                                        |
-| db_query_duration_seconds     | histogram | model, operation (select, insert, update, delete)                                 | Postgres query latency                               |
-| db_pool_connections           | gauge     | state (active, idle)                                                              | Kysely pool usage                                    |
-| redis_operations_total        | counter   | operation (get, set, del), result (ok, error)                                     | Redis operations                                     |
 
 ## Data model
 

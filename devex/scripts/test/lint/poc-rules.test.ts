@@ -209,6 +209,19 @@ describe("poc-rules lint plugin", { concurrency: true }, () => {
       const { exitCode } = await runLint(fixture("require-object-params.valid.ts"));
       assert.equal(exitCode, 0);
     });
+
+    it("reports single-field object params that should be plain positional params", async () => {
+      const { exitCode, stdout } = await runLint(
+        fixture("require-object-params.single-field.invalid.ts"),
+      );
+      assert.notEqual(exitCode, 0);
+      const violations = violationsFor({ stdout, rule: "require-object-params" });
+      assert.equal(violations.length, 4);
+      assert.ok(
+        violations.every((v) => v.includes("single-field object parameter")),
+        `expected single-field messages in:\n${violations.join("\n")}`,
+      );
+    });
   });
 
   describe("no-global-functions", () => {

@@ -1,0 +1,312 @@
+/*
+ * theme.css
+ *
+ * Design tokens plus global component styles. Uses CSS custom properties and
+ * light-dark() so dark mode and contrast come from the tokens with no
+ * per-component work. Layout uses grid/flex with gap and fluid sizing, so it
+ * reflows instead of overflowing.
+ */
+:root {
+  color-scheme: light dark;
+
+  --color-bg: light-dark(#f6f7f9, #14161a);
+  --color-surface: light-dark(#ffffff, #1e2127);
+  --color-border: light-dark(#e2e5ea, #2c3038);
+  --color-text: light-dark(#1a1d23, #e6e8ec);
+  --color-muted: light-dark(#5b616e, #9aa1ad);
+  --color-primary: light-dark(#2563eb, #5b8cff);
+  --color-primary-text: #ffffff;
+  --color-danger: light-dark(#c0392b, #ff6b5e);
+  --color-success-bg: light-dark(#e7f6ec, #102a1a);
+  --color-error-bg: light-dark(#fdecea, #2a1414);
+
+  --space: clamp(0.75rem, 0.5rem + 1vw, 1.25rem);
+  --radius: 10px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font);
+  line-height: 1.5;
+}
+
+.app-loading {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  color: var(--color-muted);
+}
+
+/* --- Login --- */
+.login {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  align-items: flex-start;
+  max-width: 28rem;
+  margin: 12vh auto 0;
+  padding: var(--space);
+}
+
+.login__title {
+  margin: 0;
+  font-size: clamp(1.8rem, 1.4rem + 2vw, 2.6rem);
+}
+
+.login__tagline {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+/* --- Layout --- */
+.page {
+  min-height: 100dvh;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.header__brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.header__context {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  margin-inline-start: auto;
+  text-align: end;
+}
+
+.header__site {
+  font-weight: 600;
+}
+
+.header__user {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.header__nav {
+  display: flex;
+  gap: var(--space);
+  align-items: center;
+}
+
+.dashboard,
+.api-keys {
+  display: grid;
+  gap: var(--space);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: start;
+  padding: var(--space);
+  max-width: 70rem;
+  margin-inline: auto;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  padding: var(--space);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.card__title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+/* --- Forms --- */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+}
+
+.field__label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.field__required {
+  color: var(--color-danger);
+  font-style: normal;
+}
+
+.field__input {
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  width: 100%;
+}
+
+.field__input--multiline {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.field__counter {
+  align-self: flex-end;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.field__counter--over {
+  color: var(--color-danger);
+}
+
+/* --- Buttons --- */
+.button {
+  padding: 0.5rem 0.9rem;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button--primary {
+  background: var(--color-primary);
+  color: var(--color-primary-text);
+  border-color: transparent;
+  align-self: flex-start;
+}
+
+.button--danger {
+  color: var(--color-danger);
+}
+
+/* --- Banners --- */
+.banner {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius);
+}
+
+.banner--error {
+  background: var(--color-error-bg);
+  color: var(--color-danger);
+}
+
+.banner--success {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--color-success-bg);
+}
+
+/* --- Tickets --- */
+.tickets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tickets__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space);
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tickets__link {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.tickets__key {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.tickets__time {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* --- Table --- */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 0.5rem;
+  text-align: start;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.create-key {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.create-key__value {
+  padding: 0.5rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  word-break: break-all;
+}
+
+.create-key__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-muted);
+}

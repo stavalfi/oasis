@@ -9,6 +9,8 @@ import type {
   MethodDefinition,
   NewExpression,
   Node,
+  ObjectPattern,
+  Pattern,
   Program,
   PropertyDefinition,
   TemplateLiteral,
@@ -428,36 +430,62 @@ const noGlobalFunctions: Rule.RuleModule = {
 const requireObjectParams: Rule.RuleModule = {
   meta: { schema: [] },
   create(context: Rule.RuleContext): Rule.RuleListener {
-    const reportIfMultipleParams = (params: unknown[], node: Node, label: string): void => {
+    // A single destructured object param that pulls exactly one field, e.g.
+    // `getProjects({ userId }: { userId: string })`, is a pointless wrapper —
+    // it should be a plain positional param `userId: string`.
+    const reportSingleFieldObjectParam = (param: Pattern, node: Node, label: string): void => {
+      const pattern: Pattern = param.type === "AssignmentPattern" ? param.left : param;
+      if (pattern.type !== "ObjectPattern") return;
+      const { properties } = pattern as ObjectPattern;
+      if (properties.length !== 1) return;
+      const [only] = properties;
+      if (!only || only.type !== "Property") return;
+      const field = only.key.type === "Identifier" ? only.key.name : undefined;
+      context.report({
+        node,
+        message: `${label} takes a single-field object parameter${
+          field ? ` { ${field} }` : ""
+        }. Destructuring an object for one field is pointless. Use a plain positional parameter instead${
+          field ? ` (e.g. \`${field}: string\`)` : ""
+        }.`,
+      });
+    };
+
+    const checkParams = (params: Pattern[], node: Node, label: string): void => {
       if (params.length > 1) {
         context.report({
           node,
           message: `${label} has ${params.length} parameters. Use a single object parameter instead.`,
         });
+        return;
+      }
+      const [onlyParam] = params;
+      if (onlyParam) {
+        reportSingleFieldObjectParam(onlyParam, node, label);
       }
     };
 
     return {
       FunctionDeclaration(node: FunctionDeclaration): void {
-        reportIfMultipleParams(node.params, node, `Function '${node.id?.name ?? "anonymous"}'`);
+        checkParams(node.params, node, `Function '${node.id?.name ?? "anonymous"}'`);
       },
       ArrowFunctionExpression(node: ArrowFunctionExpression): void {
         const parent = (node as WithParent<ArrowFunctionExpression>).parent;
         if (parent?.type !== "VariableDeclarator") return;
         const name = (parent as { id?: { name?: string } }).id?.name ?? "anonymous";
-        reportIfMultipleParams(node.params, node, `Function '${name}'`);
+        checkParams(node.params, node, `Function '${name}'`);
       },
       FunctionExpression(node: FunctionExpression): void {
         const parent = (node as WithParent<FunctionExpression>).parent;
         if (parent?.type !== "VariableDeclarator") return;
         const name = (parent as { id?: { name?: string } }).id?.name ?? "anonymous";
-        reportIfMultipleParams(node.params, node, `Function '${name}'`);
+        checkParams(node.params, node, `Function '${name}'`);
       },
       MethodDefinition(node: MethodDefinition): void {
         if (node.kind === "get" || node.kind === "set") return;
         const { params } = node.value;
         const label = node.kind === "constructor" ? "Constructor" : "Method";
-        reportIfMultipleParams(params, node, label);
+        checkParams(params, node, label);
       },
     };
   },

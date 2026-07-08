@@ -1,5 +1,6 @@
 import { type Command } from "@commander-js/extra-typings";
 import { Crd2Pulumi } from "./crd2pulumi.ts";
+import { JiraGenTypes } from "./jira-gen-types.ts";
 import { RauthyFetchSpec } from "./rauthy-fetch-spec.ts";
 import { RauthyGenTypes } from "./rauthy-gen-types.ts";
 
@@ -24,6 +25,7 @@ export class CodegenCommand {
       .action(async () => {
         await Promise.all([
           this.#rauthyCodegen(),
+          new JiraGenTypes({ repoRoot: this.#repoRoot, signal: this.#signal }).run(),
           new Crd2Pulumi({ repoRoot: this.#repoRoot, signal: this.#signal }).run(),
         ]);
       });

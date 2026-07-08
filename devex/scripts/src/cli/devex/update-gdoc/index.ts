@@ -42,7 +42,7 @@ const SavedTokenSchema = z.object({
 export class UpdateGdocCommand {
   readonly #repoRoot: string;
 
-  public constructor({ repoRoot }: { repoRoot: string; signal: AbortSignal }) {
+  public constructor(repoRoot: string) {
     this.#repoRoot = repoRoot;
   }
 

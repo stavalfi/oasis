@@ -567,11 +567,15 @@ class Lint {
 
   async #checkNoTsEmit(scope: string[]): Promise<TaskOutcome> {
     const exclude = await this.#readNoTsEmitExclude();
-    const tsconfigs = scope.filter(
-      (file) =>
+    const tsconfigs = scope.filter((file) => {
+      // lint-staged passes absolute paths; the exclude prefixes are
+      // repo-relative, so normalize before comparing.
+      const relativePath = path.relative(this.#repoRoot, path.resolve(this.#repoRoot, file));
+      return (
         /^tsconfig.*\.json$/u.test(path.basename(file)) &&
-        !exclude.some((prefix) => file.startsWith(prefix)),
-    );
+        !exclude.some((prefix) => relativePath.startsWith(prefix))
+      );
+    });
     const violations: string[] = [];
 
     await Promise.all(
