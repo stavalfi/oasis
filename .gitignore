@@ -1,6 +1,11 @@
 node_modules
 dist
 output
+
+# Secrets — never commit. Only .env.example (placeholders) is tracked.
+.env
+.env.*
+!.env.example
 .claude/scheduled_tasks.lock.direnv/
 .direnv
 *.tsbuildinfo

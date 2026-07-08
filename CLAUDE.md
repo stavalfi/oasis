@@ -20,6 +20,6 @@
 - never give me multiple solutions. just give me the best one based on what i asked.
 - dont add 2>/dev/null to commands.
 - never do `git checkout HEAD --` unless i confirm it
-- don't prefix shell commands with `nix develop --command` or `direnv exec .` — direnv already activates the flake dev shell in the working dir, so tools like `bun`, `oxlint`, `oxfmt`, `node`, `sops`, `age`, etc. are already on PATH. Just run them directly.
+- don't prefix shell commands with `nix develop --command` or `direnv exec .` — direnv already activates the flake dev shell in the working dir, so tools like `bun`, `oxlint`, `oxfmt`, `node`, etc. are already on PATH. Just run them directly.
 - run `bun run build` and `bun run lint` and `bun run format` after u finish a task/sub-task and fix all errors.
 - when i ask yes/no question. always just answer yes/no. if i want more info - i will ask for it.

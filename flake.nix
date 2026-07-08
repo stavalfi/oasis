@@ -138,12 +138,6 @@
         killport = { pkg = pkgs.killport; version = "1.1.0"; };
         # Fast grep (`rg`). Replaces grep for code search.
         ripgrep = { pkg = pkgs.ripgrep; version = "15.1.0"; };
-        # SOPS — decrypts encrypted secrets under devops/secrets/.
-        # Reads the age private key from KeePassXC via SOPS_AGE_KEY_CMD.
-        sops = { pkg = pkgs.sops; version = "3.13.1"; };
-        # `age` encryption — sops uses it as the underlying encrypt/decrypt
-        # backend (sops-age key files).
-        age = { pkg = pkgs.age; version = "1.3.1"; };
         # Local CA generator. `mkcert -install` registers a per-laptop root
         # CA in the system + browser NSS trust stores; Pulumi reads
         # ~/.local/share/mkcert/rootCA{,-key}.pem and uses them as the
@@ -155,8 +149,7 @@
         nss-tools = { pkg = pkgs.nss.tools; version = "3.112.5"; };
         # Password manager + Secret Service provider for the user session.
         # `gh`/`git`/Chrome retrieve credentials through KeePassXC's
-        # FdoSecrets interface. Also stores the sops-age private key
-        # (SOPS_AGE_KEY_CMD in the shellHook).
+        # FdoSecrets interface.
         keepassxc = { pkg = pkgs.keepassxc; version = "2.7.12"; };
         # YAML processor — `yq .field file.yaml`. Go port of yq.
         yq-go = { pkg = pkgs.yq-go; version = "4.53.3"; };
@@ -286,16 +279,6 @@
           # DOCKER_HOST automatically; we set it here so every tool in the dev
           # shell (tofu, docker-compose, etc.) uses Podman without extra config.
           export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
-          # Fetch the age private key on demand.
-          # Outside sandbox: reads from KeePassXC via Secret Service.
-          # Inside sandbox: reads from the SOPS_AGE_KEY env var injected by claude-sandbox.
-          # Every employee stores their own age private key in their personal KeePass
-          # under attrs: type=age, identity=poc-employee-age-private-key.
-          if [ -n "$IN_CLAUDE_SANDBOX" ]; then
-            export SOPS_AGE_KEY_CMD="printenv SOPS_AGE_KEY"
-          else
-            export SOPS_AGE_KEY_CMD="secret-tool lookup type age identity poc-employee-age-private-key"
-          fi
         '';
       };
     };
