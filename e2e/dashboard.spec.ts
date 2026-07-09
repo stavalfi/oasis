@@ -5,7 +5,7 @@
  * project picker, routing, and navigation to API keys. Starts from the seeded
  * session in global-setup.ts.
  */
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 
 test("shows the connected Jira site and user in the header", async ({ page }) => {
   await page.goto("/");

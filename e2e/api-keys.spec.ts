@@ -4,7 +4,7 @@
  * The API keys page: create a key with a chosen expiry (shown once), see it in
  * the list, and revoke it. Starts from the seeded session in global-setup.ts.
  */
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 
 test("creates a key with a chosen expiry, shows it once, then revokes it", async ({ page }) => {
   await page.goto("/settings/api-keys");

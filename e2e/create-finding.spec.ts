@@ -10,11 +10,11 @@
  * account has a project with key `KAN` whose create screen needs only a title +
  * description. Change SIMPLE_PROJECT_KEY if yours differs.
  */
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 
 const SIMPLE_PROJECT_KEY = "KAN";
 
-test("creates a finding and shows it in recent tickets", async ({ page }) => {
+test("creates a finding and shows it in recent tickets", async ({ page, createdIssues }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "IdentityHub" })).toBeVisible();
 
@@ -31,8 +31,12 @@ test("creates a finding and shows it in recent tickets", async ({ page }) => {
     .fill("Created by the Playwright e2e test.");
   await page.getByRole("button", { name: "Create ticket" }).click();
 
-  await expect(page.locator(".tickets__title", { hasText: title })).toBeVisible();
+  const ticket = page.locator(".tickets__item", { hasText: title });
+  await expect(ticket.locator(".tickets__title")).toBeVisible();
   await expect(page.locator(".banner--error")).toHaveCount(0);
+
+  // Track the created issue so the fixture deletes it afterwards.
+  createdIssues.push(((await ticket.locator(".tickets__key").textContent()) ?? "").trim());
 });
 
 test("keeps Create disabled until title and description are filled", async ({ page }) => {
