@@ -80,12 +80,20 @@ export class JiraAccess {
           return JiraAccess.#toFresh(connection);
         }
         const newTokens = await jiraClient.exchangeRefreshToken(connection.refreshToken);
-        await JiraConnectionsModel.updateTokens({
+        const wrote = await JiraConnectionsModel.updateTokens({
           accessToken: newTokens.accessToken,
           accessTokenExpiresAt: new Date(Date.now() + newTokens.expiresInSeconds * 1000),
+          expectedVersion: connection.version,
           refreshToken: newTokens.refreshToken,
           userId,
         });
+        // Belt-and-suspenders: if the lock was somehow bypassed and another
+        // writer rotated the tokens first, our conditional write matched no row.
+        // Reuse whatever is now stored rather than returning a token we didn't
+        // persist.
+        if (!wrote) {
+          return JiraAccess.#toFresh(await JiraAccess.#requireConnection(userId));
+        }
         return {
           accessToken: newTokens.accessToken,
           cloudId: connection.cloudId,

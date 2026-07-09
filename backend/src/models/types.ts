@@ -17,6 +17,8 @@ export interface JiraConnection {
   accessToken: string;
   refreshToken: string;
   accessTokenExpiresAt: Date;
+  /** Optimistic-concurrency version; bumped on every token write. */
+  version: number;
 }
 
 /** API key metadata returned to the UI (never the raw key or its hash). */

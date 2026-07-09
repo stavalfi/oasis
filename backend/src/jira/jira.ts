@@ -103,11 +103,13 @@ export class JiraClient {
   public constructor() {
     this.#getKy = ky.create({
       retry: {
+        // Wait for Retry-After on 429/503; back off (with jitter) on the other
+        // transient statuses. GETs are idempotent, so retrying is always safe.
         afterStatusCodes: [429, 503],
         jitter: true,
         limit: config.constants.jira.maxRetries,
         methods: ["get"],
-        statusCodes: [429, 503],
+        statusCodes: [408, 429, 500, 502, 503, 504],
       },
       throwHttpErrors: false,
     });

@@ -44,11 +44,12 @@ This document covers the backend only. The UI is in
 - Backend: Hono, with `@hono/zod-openapi` so one Zod schema per route both
   validates the request and types the handler.
 - Database: Postgres, accessed statelessly (see Multi-tenant isolation).
-- Cache: Redis, plus a per-process in-memory tier.
+- Cache: Redis, plus a per-process in-memory tier. Redis also backs the per-user
+  token-refresh lock (`@sesamecare-oss/redlock`, the maintained redlock fork).
 - Database access: Kysely (type-safe query builder) with Kysely migrations.
 - Jira client: generated from Atlassian's OpenAPI spec with `@hey-api/openapi-ts`
-  (typed operations, no hand-written calls). Its transport is `ky`, which adds
-  retry honoring `Retry-After` on 429/503.
+  (typed operations, no hand-written calls). Its transport is `ky`, which retries
+  transient failures with jittered backoff (honoring `Retry-After` on 429/503).
 - TypeScript in strictest mode; oxlint and oxfmt in strict mode, no warnings.
 - Transport: the server runs over plain HTTP locally on a single origin
   (`http://localhost:3000`). The session cookie is not marked `Secure` (a Secure
@@ -305,8 +306,25 @@ complexity beyond this exercise.
 - API keys: stored as a hash only (like a password). The raw key is shown once
   at creation and never again.
 - `refresh_token` rotates on each refresh; the stored value is overwritten.
-- Refresh trigger: the backend checks `access_token_expires_at` before calling
-  Jira and refreshes proactively if it has passed, rather than waiting for a 401.
+- Refresh is two-layered:
+  - Proactive: before calling Jira, the backend checks `access_token_expires_at`
+    (minus a 30s skew, `constants.accessTokenRefreshSkewSeconds`) and refreshes
+    if the token is at or past that point, rather than waiting for a 401.
+  - Reactive: if Jira still rejects a call with 401 (clock skew, or a token
+    invalidated server-side before its stored expiry), `JiraAccess.withConnection`
+    refreshes once and retries the operation a single time.
+- Single-flight refresh: refresh runs under a per-user distributed lock
+  (`redlock` over Redis, keyed `jira_refresh_lock:{user_id}`). After acquiring the
+  lock the row is re-read, so if another request or pod already rotated the token
+  we reuse theirs instead of spending the (now single-use, rotated) refresh token
+  again and tripping Atlassian's reuse detection.
+- Optimistic-concurrency guard: `jira_connections.version` is bumped on every
+  token write, and the refresh write is conditional on the version read. Even if
+  the lock is ever bypassed (Redis failover, a lost lock extension), a slow writer
+  cannot clobber a newer, already-rotated token pair; it detects the conflict and
+  reuses the stored tokens.
+- A refresh that fails with 400 or 403 (`invalid_grant`) means the refresh token
+  is expired or already rotated away; the backend surfaces a 401 reconnect.
 
 ## API keys
 
@@ -376,6 +394,47 @@ Operational, unauthenticated:
 | GET /docs         | Swagger UI                                  |
 | GET /health/live  | Liveness probe                              |
 | GET /health/ready | Readiness probe (checks Postgres and Redis) |
+
+### Error and retry policy (our endpoints)
+
+Every failure is mapped to one status by the central handler
+(`api/error-handler.ts`): user-input errors are 400/404, auth/reconnect is 401,
+an upstream Jira failure is 502, and anything unexpected is 500.
+
+By the time an error reaches a caller, the backend has already applied its own
+internal retries (see [Retry and recoverability](#retry-and-recoverability-outbound-jiraatlassian-calls)):
+transient rate-limit/5xx on idempotent GETs and 429 on the create POST
+(transport), plus one token-refresh retry on a Jira 401 (auth). So a status that
+reaches the client is post-retry; a client retry is a thin second layer.
+
+Recoverable vs terminal for the caller:
+
+- 502 (Jira upstream, transient after our retries), 503 (dependency not ready),
+  500 (unexpected): recoverable. A client may retry an **idempotent** call with
+  backoff (we suggest up to 3, jittered).
+- 401: terminal for retry. The Jira connection must be re-established (OAuth
+  reconnect), not retried.
+- 400 / 404: terminal. Fix the input, or the resource is gone.
+- A create (`POST /api/v1/findings`, `POST /api/tickets`, `POST /api/api-keys`)
+  is **not** auto-retried on 5xx: it is non-idempotent and may already have been
+  applied, so a blind retry risks a duplicate. Surface and let the user confirm.
+
+| Method and path                  | Statuses                   | Recoverable -> client retry    | Terminal                                                              |
+| -------------------------------- | -------------------------- | ------------------------------ | --------------------------------------------------------------------- |
+| GET /api/me                      | 200, 401, 502, 500         | 502/500 -> x3 backoff          | 401 -> reconnect                                                      |
+| GET /api/projects                | 200, 401, 502, 500         | 502/500 -> x3 backoff          | 401 -> reconnect                                                      |
+| GET /api/projects/:key/assignees | 200, 400, 401, 502, 500    | 502/500 -> x3 backoff          | 400 (bad project / no "Browse users" permission), 401 -> reconnect    |
+| GET /api/tickets?projectKey      | 200, 401, 502, 500         | 502/500 -> x3 backoff          | 401 -> reconnect                                                      |
+| POST /api/tickets                | 201, 400, 401, 502, 500    | none (non-idempotent create)   | 400 field/validation, 401 -> reconnect; 5xx -> surface, no auto-retry |
+| POST /api/v1/findings            | 201, 400, 401, 502, 500    | none (non-idempotent create)   | same as POST /api/tickets                                             |
+| GET /api/api-keys                | 200, 401, 500              | 500 -> x3 backoff              | 401                                                                   |
+| POST /api/api-keys               | 201, 400, 401, 500         | none (non-idempotent create)   | 400, 401; 5xx -> surface                                              |
+| DELETE /api/api-keys/:id         | 200, 404, 401, 500         | 500 -> x3 backoff (idempotent) | 404 (already gone), 401                                               |
+| GET /auth/login                  | 302                        | n/a (redirect)                 | -                                                                     |
+| GET /auth/callback               | 302 (to / or /login?error) | n/a (user restarts login)      | invalid/expired state -> /login?error                                 |
+| POST /auth/logout                | 200                        | 500 -> x3 (idempotent)         | -                                                                     |
+| GET /health/live                 | 200                        | n/a (orchestrator restarts)    | -                                                                     |
+| GET /health/ready                | 200, 503                   | 503 -> orchestrator re-polls   | -                                                                     |
 
 ## Typed client, OpenAPI, and health
 
@@ -473,23 +532,52 @@ Generated client:
   `constants.jira.assignableUsersPageSize` = 100). Those are small hand-written
   calls (also `ky`) that live as methods on the same `JiraClient`.
 
-Rate limiting:
+Rate limiting and transport retry:
 
 - Jira Cloud returns HTTP 429 when a rate limit is exceeded (and some 503s),
   usually with a `Retry-After` header. We do not hand-roll retry logic.
-- The generated client is configured to use `ky` as its transport. `ky` retries,
-  honoring `Retry-After` on 429 and 503, otherwise exponential backoff, capped
-  at 4 retries (5 attempts total).
-- `ky` retries only idempotent methods by default (GET and similar), so a `POST`
-  is never blindly retried into duplicate tickets. For the create-issue `POST`
-  we enable retry on 429 only: a rate-limited request was rejected before being
-  processed, so retrying it cannot create a duplicate. A `POST` is still never
-  retried on 5xx or network errors, where Jira may already have processed the
-  create, matching Atlassian's guidance.
+- The generated client uses `ky` as its transport. Retries are capped at
+  `constants.jira.maxRetries` = 4 (5 attempts total) with jittered backoff, and
+  honor `Retry-After` on 429 and 503.
+- GETs are idempotent, so the GET transport retries the full transient set:
+  408, 429, 500, 502, 503, 504.
+- The create-issue `POST` retries on 429 only: a rate-limited request was
+  rejected before processing, so retrying cannot create a duplicate. A `POST` is
+  never retried on 5xx or network errors, where Jira may already have processed
+  the create, matching Atlassian's guidance. (The two token `POST`s to
+  `auth.atlassian.com` are also 429-only, for the same reason.)
 - If retries are exhausted, the Jira call fails and the caller gets 502 (or the
   create endpoint surfaces a clear "Jira is rate limiting, try again" message).
 - Retries and rate-limit responses are logged, so 429s and backoff are visible in
   the structured logs.
+
+### Retry and recoverability (outbound Jira/Atlassian calls)
+
+Two independent retry layers, plus a deliberate split between recoverable and
+terminal errors so a retry is never spent on something it cannot fix (bad input,
+missing permission, a dead refresh token):
+
+- Transport (`ky`, above): transient rate-limit/unavailability/5xx. Up to 4
+  retries.
+- Auth (`JiraAccess.withConnection`): a 401 means the access token was rejected;
+  refresh once (under the per-user lock) and retry the call a single time. A
+  second 401 is surfaced.
+
+`op` = the `JiraClient` method. Recoverable errors are auto-retried; terminal
+errors are surfaced (mapped to a client status by `api/error-handler.ts`).
+
+| op (method)                       | HTTP       | Recoverable -> retry                                | Terminal -> surfaced                                                                                     |
+| --------------------------------- | ---------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `exchangeCode` (login)            | POST token | 429 -> transport x4                                 | 400/403 `invalid_grant` -> login fails; 5xx/network -> 502 (no POST retry)                               |
+| `exchangeRefreshToken`            | POST token | 429 -> transport x4                                 | 400/403 `invalid_grant` -> `RefreshTokenExpiredError` -> 401 reconnect; 5xx/network -> 502               |
+| `listAccessibleResources` (login) | GET        | 429/503/5xx -> transport x4                         | 401/4xx -> login fails                                                                                   |
+| `getIdentity` (login)             | GET        | 429/503/5xx -> transport x4                         | 401/4xx -> login fails                                                                                   |
+| `getAssignableUsers`              | GET        | 429/503/5xx -> transport x4; 401 -> auth refresh x1 | 400 (bad project / no "Browse users" permission), 403 -> surfaced                                        |
+| `searchCreatableProjects`         | GET        | 429/503/5xx -> transport x4; 401 -> auth refresh x1 | 403/4xx -> surfaced                                                                                      |
+| `getIssueTypes`                   | GET        | 429/503/5xx -> transport x4; 401 -> auth refresh x1 | 4xx -> surfaced                                                                                          |
+| `getIssueTypeFields`              | GET        | 429/503/5xx -> transport x4; 401 -> auth refresh x1 | 4xx -> surfaced                                                                                          |
+| `createIssue`                     | POST       | 429 -> transport x4; 401 -> auth refresh x1         | 400 field errors -> surfaced with per-field detail; 5xx/network -> 502 (no POST retry, may have created) |
+| `getIssueDetails`                 | GET        | 429/503/5xx -> transport x4; 401 -> auth refresh x1 | 404 -> row dropped (issue deleted, not an error); other 4xx -> surfaced                                  |
 
 ## Caching
 
@@ -582,7 +670,8 @@ users(id, atlassian_account_id, email, created_at)
 
 jira_connections(
   user_id PK, cloud_id, site_url,
-  enc_access_token, enc_refresh_token, access_token_expires_at
+  enc_access_token, enc_refresh_token, access_token_expires_at,
+  version   -- optimistic-concurrency counter, bumped on every token write
 )   -- one connected Jira site per user (the tenant)
 
 sessions(session_id, user_id, expires_at)
@@ -693,11 +782,12 @@ sequenceDiagram
   participant Jira as api.atlassian.com
 
   Browser->>Backend: POST /api/tickets (valid session)
-  Backend->>DB: read tenant tokens (decrypt)
-  Note over Backend: access_token_expires_at passed, refresh needed
+  Backend->>DB: read tenant tokens + version (decrypt)
+  Note over Backend: access_token_expires_at passed (minus skew), refresh needed
+  Backend->>Backend: acquire per-user refresh lock (redlock), re-read row
   Backend->>Auth: POST /oauth/token (grant_type=refresh_token + client_secret)
   Auth-->>Backend: new access_token + new rotated refresh_token
-  Backend->>DB: overwrite encrypted tokens
+  Backend->>DB: overwrite tokens WHERE version matches, bump version; release lock
   Backend->>Jira: POST issue (Bearer new access_token)
   Jira-->>Backend: created (issue key)
   Backend->>DB: record ticket, delete recent-tickets cache key
@@ -718,7 +808,7 @@ sequenceDiagram
   Backend->>DB: read tenant tokens (decrypt)
   Note over Backend: access_token expired, try refresh
   Backend->>Auth: POST /oauth/token (grant_type=refresh_token)
-  Auth-->>Backend: 400 invalid_grant (refresh token expired)
+  Auth-->>Backend: 400 or 403 invalid_grant (refresh token expired)
   Backend-->>Browser: 401 reconnect required, redirect /auth/login
   Note over Browser,Auth: full consent flow again, same as first login
 ```
@@ -814,9 +904,11 @@ chose and why.
 - Atlassian OAuth 2.0 (3LO), Resource-level access, so each user token is scoped
   to the single site the user selects. Different users can be on different sites.
 - Jira scopes (classic, per the spec's security definitions for the operations
-  we call): `read:jira-work` (createmeta, project search, issue read) and
-  `write:jira-work` (issue create), plus `read:me` for the identity call on
-  `api.atlassian.com`, plus `offline_access` for refresh tokens.
+  we call): `read:jira-work` (createmeta, project search, issue read),
+  `write:jira-work` (issue create), and `read:jira-user` (the assignable-users
+  search, which lives in Jira's user API and is not covered by `read:jira-work`),
+  plus `read:me` for the identity call on `api.atlassian.com`, plus
+  `offline_access` for refresh tokens.
 - One user equals one tenant equals one connected Jira site (see Tenancy model).
 - Recent Tickets shows only the acting user's app-created tickets from our own
   `tickets` table, filtered by selected project, capped at 10. Tickets created

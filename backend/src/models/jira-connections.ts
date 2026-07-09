@@ -6,6 +6,7 @@
  * at the choke point, so tokens are always encrypted at rest and callers only
  * ever see plaintext. The only code that reads or writes `jira_connections`.
  */
+import { sql } from "kysely";
 import { db } from "../db/database.ts";
 import { FieldCrypto } from "../lib/crypto.ts";
 import type { JiraConnection } from "./types.ts";
@@ -49,6 +50,8 @@ export class JiraConnectionsModel {
           enc_access_token: encryptedAccessToken,
           enc_refresh_token: encryptedRefreshToken,
           site_url: siteUrl,
+          // Bump so any refresh racing this re-login fails its conditional write.
+          version: sql`jira_connections.version + 1`,
         }),
       )
       .execute();
@@ -73,32 +76,44 @@ export class JiraConnectionsModel {
       cloudId: row.cloud_id,
       refreshToken: FieldCrypto.decrypt(row.enc_refresh_token),
       siteUrl: row.site_url,
+      version: row.version,
     };
   }
 
   /**
    * Overwrite the stored tokens after a refresh (the refresh token rotates on
-   * each refresh). Scoped to the acting user.
+   * each refresh), conditional on the row still being at `expectedVersion`. This
+   * is the optimistic-concurrency guard: if another writer already rotated the
+   * tokens (bumping the version), this update matches no row and returns false,
+   * so the caller reuses the newer stored tokens instead of clobbering them.
+   * Scoped to the acting user.
+   *
+   * @returns true if the row was updated, false if the version had moved on.
    */
   public static async updateTokens({
     userId,
     accessToken,
     refreshToken,
     accessTokenExpiresAt,
+    expectedVersion,
   }: {
     userId: string;
     accessToken: string;
     refreshToken: string;
     accessTokenExpiresAt: Date;
-  }): Promise<void> {
-    await db
+    expectedVersion: number;
+  }): Promise<boolean> {
+    const result = await db
       .updateTable("jira_connections")
       .set({
         access_token_expires_at: accessTokenExpiresAt,
         enc_access_token: FieldCrypto.encrypt(accessToken),
         enc_refresh_token: FieldCrypto.encrypt(refreshToken),
+        version: sql`jira_connections.version + 1`,
       })
       .where("user_id", "=", userId)
-      .execute();
+      .where("version", "=", expectedVersion)
+      .executeTakeFirst();
+    return result.numUpdatedRows > 0n;
   }
 }
