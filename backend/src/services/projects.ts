@@ -7,8 +7,8 @@
  * are set automatically. Cached per user. Delivered with the project list so the
  * frontend can render and validate the form without extra round trips.
  */
-import type { FieldMeta, Project } from "../dto/types.ts";
-import { projectsResponseSchema } from "../dto/schemas.ts";
+import type { Assignee, FieldMeta, Project } from "../dto/types.ts";
+import { assigneesResponseSchema, projectsResponseSchema } from "../dto/schemas.ts";
 import { jiraClient } from "../jira/jira.ts";
 import type { JiraFieldMeta } from "../jira/types.ts";
 import { config } from "../lib/config.ts";
@@ -94,6 +94,48 @@ export class ProjectsService {
       load: () => ProjectsService.#load(userId),
       schema: projectsResponseSchema,
       ttlSeconds: config.constants.cache.meAndProjectsTtlSeconds,
+    });
+  }
+
+  /** Load a project's assignable users (uncached). */
+  static async #loadAssignees({
+    userId,
+    projectKey,
+  }: {
+    userId: string;
+    projectKey: string;
+  }): Promise<Assignee[]> {
+    const connection = await JiraAccess.getFreshConnection(userId);
+    const users = await jiraClient.getAssignableUsers({
+      accessToken: connection.accessToken,
+      cloudId: connection.cloudId,
+      projectKey,
+    });
+    return users.map((user) => ({
+      accountId: user.accountId,
+      displayName: user.displayName ?? user.accountId,
+    }));
+  }
+
+  /**
+   * Return a project's assignable users for the assignee picker, from cache
+   * when fresh (short TTL, so newly added users show up quickly).
+   *
+   * @param userId - the acting user.
+   * @param projectKey - the project to list assignable users for.
+   */
+  public static getAssignees({
+    userId,
+    projectKey,
+  }: {
+    userId: string;
+    projectKey: string;
+  }): Promise<Assignee[]> {
+    return Cache.getOrLoad({
+      key: Cache.keyForAssignableUsers({ projectKey, userId }),
+      load: () => ProjectsService.#loadAssignees({ projectKey, userId }),
+      schema: assigneesResponseSchema,
+      ttlSeconds: config.constants.cache.assignableUsersTtlSeconds,
     });
   }
 }

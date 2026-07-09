@@ -4,8 +4,8 @@
  * One structured JSON logger (pino) for the whole backend, injected through the
  * layers. Secrets are never logged: tokens, API keys, cookies, the client
  * secret, and key hashes are redacted by the pino redaction list regardless of
- * where they appear in a logged object. Per-request child loggers (carrying
- * `request_id` and `user_id`) are created at the edge in middleware.
+ * where they appear in a logged object. The request middleware logs a one-line
+ * summary per request (including `user_id`) at the edge.
  */
 import pino from "pino";
 import type { Logger } from "pino";

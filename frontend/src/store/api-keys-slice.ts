@@ -30,8 +30,8 @@ export const loadApiKeys = createAsyncThunk("apiKeys/loadApiKeys", () => fetchAp
  * refresh the list so the new key's metadata appears. */
 export const createApiKey = createAsyncThunk(
   "apiKeys/createApiKey",
-  async (name: string, thunkApi) => {
-    const created = await postApiKey(name);
+  async (request: { name: string; expiresInDays: number }, thunkApi) => {
+    const created = await postApiKey(request);
     await thunkApi.dispatch(loadApiKeys());
     return created;
   },

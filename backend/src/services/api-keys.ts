@@ -7,7 +7,6 @@
  * owning user from the key hash.
  */
 import type { ApiKeyMetadata, CreateApiKeyResponse } from "../dto/types.ts";
-import { config } from "../lib/config.ts";
 import { Tokens } from "../lib/tokens.ts";
 import { ApiKeysModel } from "../models/api-keys.ts";
 import type { ApiKeyMetadata as ApiKeyMetadataRow } from "../models/types.ts";
@@ -33,14 +32,14 @@ export class ApiKeysService {
   public static async create({
     userId,
     name,
+    expiresInDays,
   }: {
     userId: string;
     name: string;
+    expiresInDays: number;
   }): Promise<CreateApiKeyResponse> {
     const { rawKey, keyHash } = Tokens.generateApiKey();
-    const expiresAt = new Date(
-      Date.now() + config.constants.apiKeyExpiryDays * MILLISECONDS_PER_DAY,
-    );
+    const expiresAt = new Date(Date.now() + expiresInDays * MILLISECONDS_PER_DAY);
     const row = await ApiKeysModel.create({ expiresAt, keyHash, name, userId });
     return { ...ApiKeysService.#toWireMetadata(row), key: rawKey };
   }

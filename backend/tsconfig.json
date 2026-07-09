@@ -8,6 +8,6 @@
     "sourceMap": false,
     "outDir": "dist"
   },
-  "include": ["src"],
+  "include": ["src", "scripts"],
   "references": [{ "path": "../devex/generated/jira" }]
 }

@@ -31,7 +31,10 @@ export class TicketsService {
   /** Convert a form value into the shape Jira expects for that field type. */
   static #toJiraValue({ field, value }: { field: JiraFieldMeta; value: unknown }): unknown {
     switch (field.schemaType) {
-      case "user":
+      case "user": {
+        // Jira user fields (e.g. assignee) are set by account id.
+        return { accountId: String(value) };
+      }
       case "priority":
       case "option": {
         return { id: String(value) };
@@ -62,6 +65,9 @@ export class TicketsService {
       throw new InvalidFindingError(
         `Title must be ${config.constants.validation.titleMaxLength} characters or fewer (currently ${title.length}).`,
       );
+    }
+    if (description.trim().length === 0) {
+      throw new InvalidFindingError("Description is required.");
     }
     if (description.length > config.constants.validation.descriptionMaxLength) {
       throw new InvalidFindingError(

@@ -17,6 +17,9 @@ export const Header = (): ReactNode => {
   return (
     <header className="header">
       <Link className="header__brand" to="/">
+        <span aria-hidden="true" className="header__mark">
+          IH
+        </span>
         IdentityHub
       </Link>
       {user && (
@@ -26,7 +29,9 @@ export const Header = (): ReactNode => {
         </div>
       )}
       <nav className="header__nav">
-        <Link to="/settings/api-keys">API keys</Link>
+        <Link className="header__link" to="/settings/api-keys">
+          API keys
+        </Link>
         <button
           className="button"
           onClick={() => {

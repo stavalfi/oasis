@@ -7,6 +7,7 @@
  * (frontend/src/api/types.ts) and does not depend on zod.
  */
 import { z } from "zod";
+import { config } from "../lib/config.ts";
 
 /** Current user and their connected Jira site. */
 export const meResponseSchema = z.object({
@@ -43,6 +44,14 @@ export const projectSchema = z.object({
 
 export const projectsResponseSchema = z.array(projectSchema);
 
+/** A user who can be assigned issues (for the assignee picker). */
+export const assigneeSchema = z.object({
+  accountId: z.string(),
+  displayName: z.string(),
+});
+
+export const assigneesResponseSchema = z.array(assigneeSchema);
+
 /** A recent app-created ticket (title fetched live from Jira). */
 export const ticketSchema = z.object({
   createdAt: z.string(),
@@ -78,8 +87,9 @@ export const apiKeyMetadataSchema = z.object({
 
 export const apiKeysResponseSchema = z.array(apiKeyMetadataSchema);
 
-/** Body for creating an API key (just a human label). */
+/** Body for creating an API key: a human label and how long it stays valid. */
 export const createApiKeyRequestSchema = z.object({
+  expiresInDays: z.number().int().min(1).max(config.constants.apiKeyMaxExpiryDays),
   name: z.string(),
 });
 
@@ -91,5 +101,4 @@ export const createApiKeyResponseSchema = apiKeyMetadataSchema.extend({
 /** Uniform error body returned by the API. */
 export const errorResponseSchema = z.object({
   message: z.string(),
-  requestId: z.string().optional(),
 });

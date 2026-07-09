@@ -32,7 +32,9 @@ export const ProjectPicker = (): ReactNode => {
 
   return (
     <label className="field">
-      <span className="field__label">Project</span>
+      <span className="field__label">
+        Project<em className="field__required"> *</em>
+      </span>
       <select
         className="field__input"
         onChange={(event) => dispatch(selectProject(event.target.value))}

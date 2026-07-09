@@ -21,5 +21,4 @@ Pulumi.*.yaml
 devex/generated/**/src
 devops/crds/generated/crds2pulumi/src
 .serena
-backend/certs
 frontend/dist

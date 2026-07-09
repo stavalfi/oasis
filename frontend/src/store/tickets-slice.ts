@@ -49,10 +49,11 @@ const ticketsSlice = createSlice({
       .addCase(createFinding.fulfilled, (state) => {
         state.creating = false;
       })
-      .addCase(createFinding.rejected, (state) => {
+      .addCase(createFinding.rejected, (state, action) => {
         state.creating = false;
         state.createError =
-          "We couldn't reach Jira. Your finding was not created, please try again.";
+          action.error.message ??
+          "We couldn't create the finding. Please check the fields and try again.";
       });
   },
   initialState,

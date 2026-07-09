@@ -25,6 +25,7 @@ import { config } from "../lib/config.ts";
 import { JiraApiError } from "./errors/jira-api-error.ts";
 import { RefreshTokenExpiredError } from "./errors/refresh-token-expired-error.ts";
 import {
+  assignableUsersSchema,
   createdIssueSchema,
   fieldsSchema,
   identitySchema,
@@ -36,6 +37,7 @@ import {
 } from "./schemas.ts";
 import type {
   AccessibleResource,
+  JiraAssignableUser,
   JiraFieldMeta,
   JiraIdentity,
   JiraIssueTypeSummary,
@@ -56,6 +58,29 @@ export class JiraClient {
   /** Base URL for authenticated Jira REST calls (the cloud id selects the site). */
   static #jiraApiBase(cloudId: string): string {
     return `${config.constants.jira.apiBaseUrl}/${cloudId}`;
+  }
+
+  /**
+   * Pull a human-readable reason out of a Jira error body. Jira returns
+   * `{ errorMessages: [...], errors: { <field>: <reason> } }`; we join the
+   * general messages and the per-field reasons into one sentence.
+   */
+  static #extractJiraErrorDetail(error: unknown): string | undefined {
+    if (typeof error !== "object" || error === null) {
+      return undefined;
+    }
+    const reasons: string[] = [];
+    if ("errorMessages" in error && Array.isArray(error.errorMessages)) {
+      reasons.push(...error.errorMessages.filter((reason) => typeof reason === "string"));
+    }
+    if ("errors" in error && typeof error.errors === "object" && error.errors !== null) {
+      for (const [fieldId, reason] of Object.entries(error.errors)) {
+        if (typeof reason === "string") {
+          reasons.push(`${fieldId}: ${reason}`);
+        }
+      }
+    }
+    return reasons.length === 0 ? undefined : reasons.join(" ");
   }
 
   /** Convert plain text to a minimal Atlassian Document Format document. */
@@ -103,6 +128,7 @@ export class JiraClient {
         grant_type: "authorization_code",
         redirect_uri: config.server.oauthCallbackUrl,
       },
+      method: "post",
     });
     if (!response.ok) {
       throw new JiraApiError({
@@ -133,6 +159,7 @@ export class JiraClient {
         grant_type: "refresh_token",
         refresh_token: refreshToken,
       },
+      method: "post",
     });
     if (response.status === 400) {
       throw new RefreshTokenExpiredError();
@@ -188,6 +215,33 @@ export class JiraClient {
     const body: unknown = await response.json();
     const identity = identitySchema.parse(body);
     return { accountId: identity.account_id, email: identity.email };
+  }
+
+  /** List users who can be assigned issues in a project (for the assignee picker). */
+  public async getAssignableUsers({
+    cloudId,
+    accessToken,
+    projectKey,
+  }: {
+    cloudId: string;
+    accessToken: string;
+    projectKey: string;
+  }): Promise<JiraAssignableUser[]> {
+    const url = `${JiraClient.#jiraApiBase(cloudId)}/rest/api/3/user/assignable/search?project=${encodeURIComponent(projectKey)}&maxResults=${config.constants.jira.assignableUsersPageSize}`;
+    const response = await this.#getKy(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      throw new JiraApiError({
+        message: "Failed to list assignable users.",
+        operation: "assignable_users",
+        status: response.status,
+      });
+    }
+    const body: unknown = await response.json();
+    return assignableUsersSchema
+      .parse(body)
+      .map((user) => ({ accountId: user.accountId, displayName: user.displayName }));
   }
 
   /** List projects the acting user can create issues in. */
@@ -304,7 +358,7 @@ export class JiraClient {
     description: string;
     extraFields: Record<string, unknown>;
   }): Promise<{ key: string }> {
-    const { data, response } = await createIssue({
+    const { data, error, response } = await createIssue({
       baseUrl: JiraClient.#jiraApiBase(cloudId),
       body: {
         fields: {
@@ -321,6 +375,7 @@ export class JiraClient {
     });
     if (data === undefined) {
       throw new JiraApiError({
+        detail: JiraClient.#extractJiraErrorDetail(error),
         message: "Failed to create issue.",
         operation: "create_issue",
         status: response?.status ?? 0,

@@ -8,6 +8,7 @@
 import type { z } from "zod";
 import type {
   apiKeyMetadataSchema,
+  assigneeSchema,
   createApiKeyRequestSchema,
   createApiKeyResponseSchema,
   createFindingRequestSchema,
@@ -20,6 +21,7 @@ import type {
 } from "./schemas.ts";
 
 export type MeResponse = z.infer<typeof meResponseSchema>;
+export type Assignee = z.infer<typeof assigneeSchema>;
 export type FieldMeta = z.infer<typeof fieldMetaSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Ticket = z.infer<typeof ticketSchema>;

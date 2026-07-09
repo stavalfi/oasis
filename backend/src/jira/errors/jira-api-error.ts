@@ -8,19 +8,24 @@
 export class JiraApiError extends Error {
   public readonly status: number;
   public readonly operation: string;
+  /** Jira's own error text (e.g. which field it rejected), when available. */
+  public readonly detail: string | undefined;
 
   public constructor({
     operation,
     status,
     message,
+    detail,
   }: {
     operation: string;
     status: number;
     message: string;
+    detail?: string | undefined;
   }) {
     super(message);
     this.name = "JiraApiError";
     this.operation = operation;
     this.status = status;
+    this.detail = detail;
   }
 }

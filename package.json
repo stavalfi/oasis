@@ -7,8 +7,7 @@
     "#jira/*": "./devex/generated/jira/src/*"
   },
   "scripts": {
-    "backend": "bash backend/scripts/start.sh",
-    "frontend": "vite build --watch",
+    "backend": "node --env-file .env backend/scripts/start.ts",
     "frontend:build": "vite build",
     "test": "node --test --test-concurrency 8",
     "build": "tsc --build",

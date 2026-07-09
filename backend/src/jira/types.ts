@@ -38,6 +38,12 @@ export interface JiraIssueTypeSummary {
   name: string;
 }
 
+/** A user who can be assigned issues in a project (assignable/search). */
+export interface JiraAssignableUser {
+  accountId: string;
+  displayName: string | undefined;
+}
+
 /** An allowed value for an enum-like field. */
 export interface JiraAllowedValue {
   id?: string | undefined;

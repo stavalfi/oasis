@@ -39,11 +39,14 @@ export const config = deepFreeze({
     // Refresh the Jira access token this many seconds before it actually
     // expires, so a call never goes out with a token about to lapse.
     accessTokenRefreshSkewSeconds: 30,
-    apiKeyExpiryDays: 90,
+    // Upper bound on a requested API key lifetime (10 years). The caller picks
+    // the actual expiry when creating the key.
+    apiKeyMaxExpiryDays: 3650,
     // Prefix on raw API keys, so a leaked key is recognizable in logs/scanners.
     apiKeyPrefix: "ih_",
     apiKeyRandomBytes: 32,
     cache: {
+      assignableUsersTtlSeconds: 60,
       meAndProjectsTtlSeconds: 300,
       recentTicketsTtlSeconds: 10,
     },
@@ -59,6 +62,8 @@ export const config = deepFreeze({
       accessibleResourcesUrl: "https://api.atlassian.com/oauth/token/accessible-resources",
       // Base for authenticated Jira REST calls; the cloud id selects the site.
       apiBaseUrl: "https://api.atlassian.com/ex/jira",
+      // Cap for a single page of assignable users (POC: one page is enough).
+      assignableUsersPageSize: 100,
       // The identity (/me) endpoint.
       identityUrl: "https://api.atlassian.com/me",
       // Only the summary is fetched when refreshing a Recent Tickets title.
@@ -118,10 +123,6 @@ export const config = deepFreeze({
   server: {
     oauthCallbackUrl: env.OAUTH_CALLBACK_URL,
     port: env.PORT,
-    // Self-signed TLS material generated (no sudo) by backend/scripts/start.sh
-    // with openssl. Paths are relative to the repo root, the process CWD.
-    tlsCertFile: "backend/certs/localhost.crt",
-    tlsKeyFile: "backend/certs/localhost.key",
   },
 } as const);
 

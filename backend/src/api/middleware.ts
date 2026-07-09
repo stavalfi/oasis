@@ -1,13 +1,12 @@
 /**
  * middleware.ts
  *
- * Cross-cutting middleware: a per-request context (request id + child logger +
- * request summary log), and the two authentication guards. `requireSession`
- * protects the browser API (session cookie); `requireApiKey` protects the
- * machine API (bearer key). Both resolve the acting user and set it on the
- * context so handlers never re-check auth.
+ * Cross-cutting middleware: a per-request context (logger + request summary
+ * log), and the two authentication guards. `requireSession` protects the
+ * browser API (session cookie); `requireApiKey` protects the machine API
+ * (bearer key). Both resolve the acting user and set it on the context so
+ * handlers never re-check auth.
  */
-import { randomUUID } from "node:crypto";
 import { deleteCookie, getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
@@ -21,18 +20,14 @@ import type { AppEnv } from "./app-env.ts";
 const BEARER_PREFIX = "Bearer ";
 
 export class Middleware {
-  /** Attach a request id and child logger, and log a one-line request summary. */
+  /** Attach the logger to the context and log a one-line request summary. */
   public static readonly requestContext = createMiddleware<AppEnv>(async (context, next) => {
-    const requestId = context.req.header("x-request-id") ?? randomUUID();
-    const requestLogger = logger.child({ request_id: requestId });
-    context.set("requestId", requestId);
-    context.set("logger", requestLogger);
-    context.header("x-request-id", requestId);
+    context.set("logger", logger);
 
     const startedAtMs = Date.now();
     const proceedToNext = next;
     await proceedToNext();
-    requestLogger.info(
+    logger.info(
       {
         duration_ms: Date.now() - startedAtMs,
         method: context.req.method,

@@ -50,6 +50,17 @@ export class Cache {
     return `recent_tickets:${userId}:${projectKey}`;
   }
 
+  /** Cache key for a project's assignable users. */
+  public static keyForAssignableUsers({
+    userId,
+    projectKey,
+  }: {
+    userId: string;
+    projectKey: string;
+  }): string {
+    return `assignable_users:${userId}:${projectKey}`;
+  }
+
   /**
    * Return a cached value if present and fresh, otherwise load it, populate both
    * tiers, and return it. The result is validated against the schema.

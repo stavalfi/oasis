@@ -13,6 +13,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
   apiKeysResponseSchema,
+  assigneesResponseSchema,
   createApiKeyRequestSchema,
   createApiKeyResponseSchema,
   createFindingRequestSchema,
@@ -81,6 +82,28 @@ export const app = openApiApp
       },
     }),
     async (context) => context.json(await ProjectsService.getProjects(context.get("userId")), 200),
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      middleware: sessionOnly,
+      path: "/api/projects/{projectKey}/assignees",
+      request: { params: z.object({ projectKey: z.string() }) },
+      responses: {
+        200: {
+          content: { "application/json": { schema: assigneesResponseSchema } },
+          description: "Users who can be assigned issues in the project.",
+        },
+      },
+    }),
+    async (context) =>
+      context.json(
+        await ProjectsService.getAssignees({
+          projectKey: context.req.valid("param").projectKey,
+          userId: context.get("userId"),
+        }),
+        200,
+      ),
   )
   .openapi(
     createRoute({
@@ -158,6 +181,7 @@ export const app = openApiApp
     async (context) =>
       context.json(
         await ApiKeysService.create({
+          expiresInDays: context.req.valid("json").expiresInDays,
           name: context.req.valid("json").name,
           userId: context.get("userId"),
         }),
@@ -225,13 +249,15 @@ export const app = openApiApp
     }
     try {
       const session = await AuthService.handleCallback({ code, state });
-      // JS-invisible, HTTPS-only, CSRF-resistant session cookie.
+      // JS-invisible, CSRF-resistant session cookie. Not marked Secure: the app
+      // is served over plain HTTP, and a Secure cookie is never stored or sent
+      // over HTTP.
       setCookie(context, config.constants.sessionCookieName, session.sessionId, {
         expires: session.expiresAt,
         httpOnly: true,
         path: "/",
         sameSite: "Lax",
-        secure: true,
+        secure: false,
       });
       return context.redirect("/");
     } catch (error: unknown) {

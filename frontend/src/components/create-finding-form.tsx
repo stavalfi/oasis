@@ -8,6 +8,8 @@
  */
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { fetchAssignees } from "../client.ts";
+import type { Assignee } from "../client.ts";
 import { createFinding } from "../store/tickets-slice.ts";
 import { useAppDispatch, useAppSelector } from "../store/hooks.ts";
 
@@ -32,6 +34,26 @@ export const CreateFindingForm = (): ReactNode => {
   const project = projects.find((candidate) => candidate.key === selectedProjectKey);
 
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
+
+  // Load the assignable users for the selected project (for user-type fields).
+  useEffect(() => {
+    if (selectedProjectKey === undefined) {
+      return;
+    }
+    setAssignees([]);
+    const loadAssignees = async (): Promise<void> => {
+      try {
+        setAssignees(await fetchAssignees(selectedProjectKey));
+      } catch (error: unknown) {
+        // Leave the picker empty so the rest of the form still works, but never
+        // hide the failure — surface it in the console.
+        console.error("Failed to load assignable users", error);
+        setAssignees([]);
+      }
+    };
+    void loadAssignees();
+  }, [selectedProjectKey]);
 
   // Restore the saved draft when the selected project changes.
   useEffect(() => {
@@ -59,6 +81,7 @@ export const CreateFindingForm = (): ReactNode => {
   }
 
   const trimmedTitle = draft.title.trim();
+  const trimmedDescription = draft.description.trim();
   const isTitleTooLong = draft.title.length > TITLE_MAX_LENGTH;
   const isDescriptionTooLong = draft.description.length > DESCRIPTION_MAX_LENGTH;
   const hasMissingRequired = project.fields.some(
@@ -66,6 +89,7 @@ export const CreateFindingForm = (): ReactNode => {
   );
   const canSubmit =
     trimmedTitle.length > 0 &&
+    trimmedDescription.length > 0 &&
     !isTitleTooLong &&
     !isDescriptionTooLong &&
     !hasMissingRequired &&
@@ -82,7 +106,12 @@ export const CreateFindingForm = (): ReactNode => {
     const fields: Record<string, unknown> = {};
     for (const field of project.fields) {
       const value = (draft.fieldValues[field.fieldId] ?? "").trim();
-      if (value.length > 0) {
+      const isDate = field.type === "date" || field.type === "datetime";
+      // Only send a field the user actually filled. A date value that isn't a
+      // valid yyyy-MM-dd (e.g. a stale draft the date picker can't display) is
+      // treated as empty, so we never submit a field that looks blank.
+      const isUsable = value.length > 0 && (!isDate || /^\d{4}-\d{2}-\d{2}$/u.test(value));
+      if (isUsable) {
         fields[field.fieldId] =
           field.type === "array"
             ? value
@@ -104,8 +133,10 @@ export const CreateFindingForm = (): ReactNode => {
       // On success clear the saved draft so it does not linger.
       globalThis.localStorage.removeItem(draftStorageKey(project.key));
       setDraft(emptyDraft);
-    } catch {
-      // The error is surfaced via createError; the draft is intentionally kept.
+    } catch (error: unknown) {
+      // The message is surfaced to the user via createError and the draft is
+      // intentionally kept; also log it so the full error is never hidden.
+      console.error("Failed to create finding", error);
     }
   };
 
@@ -118,7 +149,9 @@ export const CreateFindingForm = (): ReactNode => {
       }}
     >
       <label className="field">
-        <span className="field__label">Title</span>
+        <span className="field__label">
+          Title<em className="field__required"> *</em>
+        </span>
         <input
           className="field__input"
           onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
@@ -130,7 +163,9 @@ export const CreateFindingForm = (): ReactNode => {
       </label>
 
       <label className="field">
-        <span className="field__label">Description</span>
+        <span className="field__label">
+          Description<em className="field__required"> *</em>
+        </span>
         <textarea
           className="field__input field__input--multiline"
           onChange={(event) =>
@@ -140,13 +175,29 @@ export const CreateFindingForm = (): ReactNode => {
         />
       </label>
 
-      {project.fields.map((field) => (
-        <label className="field" key={field.fieldId}>
-          <span className="field__label">
-            {field.name}
-            {field.required && <em className="field__required"> *</em>}
-          </span>
-          {field.allowedValues !== undefined && field.allowedValues.length > 0 ? (
+      {project.fields.map((field) => {
+        let control: ReactNode;
+        if (field.type === "user") {
+          // A Jira user field (e.g. assignee): pick from the project's
+          // assignable users so we only ever send a valid account.
+          control = (
+            <select
+              className="field__input"
+              onChange={(event) =>
+                setFieldValue({ fieldId: field.fieldId, value: event.target.value })
+              }
+              value={draft.fieldValues[field.fieldId] ?? ""}
+            >
+              <option value="">— unassigned —</option>
+              {assignees.map((user) => (
+                <option key={user.accountId} value={user.accountId}>
+                  {user.displayName}
+                </option>
+              ))}
+            </select>
+          );
+        } else if (field.allowedValues !== undefined && field.allowedValues.length > 0) {
+          control = (
             <select
               className="field__input"
               onChange={(event) =>
@@ -164,18 +215,35 @@ export const CreateFindingForm = (): ReactNode => {
                 </option>
               ))}
             </select>
-          ) : (
+          );
+        } else {
+          control = (
             <input
               className="field__input"
               onChange={(event) =>
                 setFieldValue({ fieldId: field.fieldId, value: event.target.value })
               }
               placeholder={field.type === "array" ? "comma, separated, values" : ""}
+              type={field.type === "date" ? "date" : "text"}
               value={draft.fieldValues[field.fieldId] ?? ""}
             />
-          )}
-        </label>
-      ))}
+          );
+        }
+
+        return (
+          <label className="field" key={field.fieldId}>
+            <span className="field__label">
+              {field.name}
+              {field.required ? (
+                <em className="field__required"> *</em>
+              ) : (
+                <span className="field__optional"> (optional)</span>
+              )}
+            </span>
+            {control}
+          </label>
+        );
+      })}
 
       {createError !== undefined && <p className="banner banner--error">{createError}</p>}
 

@@ -50,9 +50,9 @@ This document covers the backend only. The UI is in
   (typed operations, no hand-written calls). Its transport is `ky`, which adds
   retry honoring `Retry-After` on 429/503.
 - TypeScript in strictest mode; oxlint and oxfmt in strict mode, no warnings.
-- Local HTTPS: the server runs over TLS locally using `devcert`, which issues a
-  locally-trusted certificate (`backend/src/lib/tls.ts`). This makes `Secure`
-  cookies and the https OAuth callback behave locally as they do in production.
+- Transport: the server runs over plain HTTP locally on a single origin
+  (`http://localhost:3000`), which also serves the built frontend. The session
+  cookie is not marked `Secure` (a Secure cookie is never sent over HTTP).
 - Frontend: minimal React SPA.
 - One command runs everything (see Run locally).
 
@@ -75,7 +75,7 @@ backend/src/
   db/
     migrations/ Kysely migration files.
     schema.ts   typed database schema for Kysely.
-  lib/          crypto (field-level encryption), tls, config.
+  lib/          crypto (field-level encryption), config, logger.
   index.ts      entry point, wires the layers together.
 ```
 
@@ -713,7 +713,7 @@ sequenceDiagram
   Browser->>Backend: POST /auth/logout (cookie)
   Backend->>DB: delete session row
   Backend-->>Browser: clear cookie
-  Note over Backend,DB: Jira tokens kept unless user disconnects; session is gone
+  Note over Backend,DB: Jira tokens kept unless user disconnects. Session is gone
 ```
 
 ---
@@ -727,7 +727,7 @@ configuration lives in `.env` at the repo root, which is gitignored.
 | ------------------ | ------------------------------------------- |
 | JIRA_CLIENT_ID     | Atlassian OAuth app client id               |
 | JIRA_CLIENT_SECRET | Atlassian OAuth app client secret           |
-| OAUTH_CALLBACK_URL | `https://localhost:3000/auth/callback`      |
+| OAUTH_CALLBACK_URL | `http://localhost:3000/auth/callback`       |
 | ENCRYPTION_KEY     | Symmetric key for field-level encryption    |
 | POSTGRES_USER      | Postgres username                           |
 | POSTGRES_PASSWORD  | Postgres password                           |
@@ -779,6 +779,6 @@ chose and why.
   directly in Jira are out of scope by design.
 - Machine callers use API keys created by a human in the UI, then configured into
   the scanner or CI system.
-- Callback URL for local run: `https://localhost:3000/auth/callback`.
+- Callback URL for local run: `http://localhost:3000/auth/callback`.
 - Not built (documented as future work): per-tenant keys, envelope encryption,
   KMS, OIDC federation for machine callers, rate limiting of our own API.

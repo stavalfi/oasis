@@ -50,6 +50,10 @@ export const fieldsSchema = z.object({
     .optional(),
 });
 
+export const assignableUsersSchema = z.array(
+  z.object({ accountId: z.string(), displayName: z.string().optional() }),
+);
+
 export const createdIssueSchema = z.object({ key: z.string() });
 
 export const issueSummarySchema = z.object({

@@ -16,8 +16,29 @@ import type { InferRequestType, InferResponseType } from "hono/client";
 
 const client = hc<AppType>("/", { init: { credentials: "include" } });
 
+/**
+ * Pull the backend's human-readable `{ message }` off a failed response so the
+ * UI can show the real reason (e.g. Jira's field error) instead of a generic
+ * line. Falls back to the status when the body has no message.
+ */
+const readErrorMessage = async (response: Response): Promise<string> => {
+  const body: unknown = await response.json().catch(() => {});
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    "message" in body &&
+    typeof body.message === "string"
+  ) {
+    return body.message;
+  }
+  return `Request failed with status ${response.status}.`;
+};
+
 export type MeResponse = InferResponseType<typeof client.api.me.$get>;
 export type Project = InferResponseType<typeof client.api.projects.$get>[number];
+export type Assignee = InferResponseType<
+  (typeof client.api.projects)[":projectKey"]["assignees"]["$get"]
+>[number];
 export type Ticket = InferResponseType<(typeof client.api.tickets)["$get"]>[number];
 export type CreateFindingRequest = InferRequestType<(typeof client.api.tickets)["$post"]>["json"];
 export type CreateFindingResponse = InferResponseType<(typeof client.api.tickets)["$post"]>;
@@ -47,11 +68,22 @@ export const fetchProjects = async (): Promise<Project[]> => {
   return response.json();
 };
 
+/** Users who can be assigned issues in a project (for the assignee picker). */
+export const fetchAssignees = async (projectKey: string): Promise<Assignee[]> => {
+  const response = await client.api.projects[":projectKey"].assignees.$get({
+    param: { projectKey },
+  });
+  if (!response.ok) {
+    throw new Error(`GET /api/projects/${projectKey}/assignees failed with ${response.status}`);
+  }
+  return response.json();
+};
+
 /** Create a finding ticket. */
 export const postFinding = async (body: CreateFindingRequest): Promise<CreateFindingResponse> => {
   const response = await client.api.tickets.$post({ json: body });
   if (!response.ok) {
-    throw new Error(`POST /api/tickets failed with ${response.status}`);
+    throw new Error(await readErrorMessage(response));
   }
   return response.json();
 };
@@ -75,8 +107,14 @@ export const fetchApiKeys = async (): Promise<ApiKeyMetadata[]> => {
 };
 
 /** Create an API key (the raw key is returned once). */
-export const postApiKey = async (name: string): Promise<CreateApiKeyResponse> => {
-  const response = await client.api["api-keys"].$post({ json: { name } });
+export const postApiKey = async ({
+  name,
+  expiresInDays,
+}: {
+  name: string;
+  expiresInDays: number;
+}): Promise<CreateApiKeyResponse> => {
+  const response = await client.api["api-keys"].$post({ json: { expiresInDays, name } });
   if (!response.ok) {
     throw new Error(`POST /api/api-keys failed with ${response.status}`);
   }

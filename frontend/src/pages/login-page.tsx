@@ -14,18 +14,23 @@ export const LoginPage = (): ReactNode => {
 
   return (
     <main className="login">
-      <h1 className="login__title">IdentityHub</h1>
-      <p className="login__tagline">
-        Report non-human-identity findings straight to your Jira project.
-      </p>
-      {hasOauthError && (
-        <p className="banner banner--error">
-          We couldn&apos;t complete the Jira login. Please try again.
+      <div className="login__card">
+        <span aria-hidden="true" className="login__logo">
+          IH
+        </span>
+        <h1 className="login__title">IdentityHub</h1>
+        <p className="login__tagline">
+          Report non-human-identity findings straight to your Jira project.
         </p>
-      )}
-      <button className="button button--primary" onClick={goToLogin} type="button">
-        Connect Jira
-      </button>
+        {hasOauthError && (
+          <p className="banner banner--error">
+            We couldn&apos;t complete the Jira login. Please try again.
+          </p>
+        )}
+        <button className="button button--primary button--block" onClick={goToLogin} type="button">
+          Connect Jira
+        </button>
+      </div>
     </main>
   );
 };

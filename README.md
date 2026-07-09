@@ -5,7 +5,7 @@ Design docs: [backend](docs/backend-design.md), [frontend](docs/frontend-design.
 
 ## Prerequisites
 
-- Nodejs v26 (runtime), Bun (as package manager & frontend runner), Docker (for Postgres and Redis).
+- Nodejs v26 (runtime), Bun (as package manager), Docker (for Postgres and Redis).
 - A `.env` file with the Jira OAuth credentials and Postgres/Redis settings
   (see the Run locally section of the backend design doc for the full list).
 
@@ -22,4 +22,4 @@ bun run docker-compose:up   # start Postgres and Redis
 bun run backend    # migrate DB -> generate Kysely types -> start server + serve the frontend
 ```
 
-now go to: https://localhost:3000
+now go to: http://localhost:3000
