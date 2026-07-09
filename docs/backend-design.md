@@ -395,13 +395,23 @@ Operational, unauthenticated:
 
 ### Error and retry policy (our endpoints)
 
-Retries are a backend concern; clients do not retry. Every outbound
-Jira/Atlassian call is retried inside the backend (see
-[Retry and recoverability](#retry-and-recoverability-outbound-jiraatlassian-calls)):
-the transport layer retries transient 429/503/5xx on idempotent GETs and 429 on
-the create POST, and the auth layer refreshes once and retries on a Jira 401. A
-response returned to the caller is **final** — the backend already exhausted the
-retries that make sense, so there is nothing useful for a client to re-drive.
+Retries are a backend concern; clients do not retry. There are three layers,
+all server-side:
+
+1. **Endpoint layer** (`lib/retry.ts`, `Retry.idempotent`): the idempotent
+   **read** endpoints retry the whole operation on a transient failure — an
+   upstream Jira 5xx, or a Redis/lock blip (redlock `ExecutionError`) — up to
+   `constants.apiRetry.attempts` = 3, with full-jitter exponential backoff.
+   Terminal errors (400/404/401, Jira 4xx) are rethrown at once. **Creates are
+   never wrapped** (non-idempotent; a retry could duplicate the issue).
+2. **Auth layer** (`JiraAccess.withConnection`): a Jira 401 refreshes the token
+   once (under the per-user lock) and retries the call once.
+3. **Transport layer** (`ky`, see
+   [Retry and recoverability](#retry-and-recoverability-outbound-jiraatlassian-calls)):
+   transient 429/503/5xx on idempotent GETs and 429 on the create POST.
+
+A response returned to the caller is **final** — the backend already exhausted
+the retries that make sense, so there is nothing useful for a client to re-drive.
 
 Every failure is mapped to one status by the central handler
 (`api/error-handler.ts`):
@@ -425,20 +435,20 @@ Every failure is mapped to one status by the central handler
 "Retried in backend" is the internal retry applied while handling the call; the
 client just receives the final status.
 
-| Method and path                  | Statuses                | Retried in backend (internal)         | Client outcome (no client retry)                                   |
-| -------------------------------- | ----------------------- | ------------------------------------- | ------------------------------------------------------------------ |
-| GET /api/me                      | 200, 401, 500           | none (DB only, no Jira call)          | 401 session -> log in                                              |
-| GET /api/projects                | 200, 401, 502, 500      | Jira GET: 429/503/5xx x4, 401 refresh | 401 session -> log in; 401 -> reconnect; 502/500 shown             |
-| GET /api/projects/:key/assignees | 200, 400, 401, 502, 500 | Jira GET: 429/503/5xx x4, 401 refresh | 400 (bad project / no "Browse users" perm); 401 -> reconnect       |
-| GET /api/tickets?projectKey      | 200, 401, 502, 500      | Jira GET: 429/503/5xx x4, 401 refresh | 401 -> reconnect; 502/500 shown                                    |
-| POST /api/tickets                | 201, 400, 401, 502, 500 | create POST: 429 x4, 401 refresh      | 400 field/validation; 401 -> reconnect; 502 shown (not re-created) |
-| POST /api/v1/findings            | 201, 400, 401, 502, 500 | create POST: 429 x4, 401 refresh      | same as POST /api/tickets                                          |
-| GET /api/api-keys                | 200, 401, 500           | none (DB only)                        | 401 session -> log in                                              |
-| POST /api/api-keys               | 201, 400, 401, 500      | none (DB only)                        | 400 validation; 401 session                                        |
-| DELETE /api/api-keys/:id         | 200, 404, 401, 500      | none (DB only)                        | 404 (already gone); 401 session                                    |
-| GET /auth/login                  | 302                     | n/a                                   | redirect to Atlassian authorize                                    |
-| GET /auth/callback               | 302                     | n/a                                   | redirect to / or /login?error (invalid/expired state)              |
-| POST /auth/logout                | 200                     | n/a                                   | -                                                                  |
+| Method and path                  | Statuses                | Retried in backend (internal)                        | Client outcome (no client retry)                                   |
+| -------------------------------- | ----------------------- | ---------------------------------------------------- | ------------------------------------------------------------------ |
+| GET /api/me                      | 200, 401, 500           | endpoint x3 (transient only; DB read, no Jira)       | 401 session -> log in                                              |
+| GET /api/projects                | 200, 401, 502, 500      | endpoint x3, then Jira GET x4 + 401 refresh          | 401 session -> log in; 401 -> reconnect; 502/500 shown             |
+| GET /api/projects/:key/assignees | 200, 400, 401, 502, 500 | endpoint x3, then Jira GET x4 + 401 refresh          | 400 (bad project / no "Browse users" perm); 401 -> reconnect       |
+| GET /api/tickets?projectKey      | 200, 401, 502, 500      | endpoint x3, then Jira GET x4 + 401 refresh          | 401 -> reconnect; 502/500 shown                                    |
+| POST /api/tickets                | 201, 400, 401, 502, 500 | create POST: 429 x4, 401 refresh (no endpoint retry) | 400 field/validation; 401 -> reconnect; 502 shown (not re-created) |
+| POST /api/v1/findings            | 201, 400, 401, 502, 500 | create POST: 429 x4, 401 refresh (no endpoint retry) | same as POST /api/tickets                                          |
+| GET /api/api-keys                | 200, 401, 500           | none (DB only)                                       | 401 session -> log in                                              |
+| POST /api/api-keys               | 201, 400, 401, 500      | none (DB only)                                       | 400 validation; 401 session                                        |
+| DELETE /api/api-keys/:id         | 200, 404, 401, 500      | none (DB only)                                       | 404 (already gone); 401 session                                    |
+| GET /auth/login                  | 302                     | n/a                                                  | redirect to Atlassian authorize                                    |
+| GET /auth/callback               | 302                     | n/a                                                  | redirect to / or /login?error (invalid/expired state)              |
+| POST /auth/logout                | 200                     | n/a                                                  | -                                                                  |
 
 ## Typed client and OpenAPI
 

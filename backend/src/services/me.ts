@@ -7,6 +7,7 @@
 import type { MeResponse } from "../dto/types.ts";
 import { meResponseSchema } from "../dto/schemas.ts";
 import { config } from "../config.ts";
+import { Retry } from "../lib/retry.ts";
 import { JiraConnectionsModel } from "../models/jira-connections.ts";
 import { UsersModel } from "../models/users.ts";
 import { Cache } from "../redis/cache.ts";
@@ -28,24 +29,26 @@ export class MeService {
    * @param userId - the acting user.
    */
   public static getMe(userId: string): Promise<MeResponse> {
-    return Cache.getOrLoad({
-      key: Cache.keyForMe(userId),
-      load: async () => {
-        const user = await UsersModel.findById(userId);
-        if (user === undefined) {
-          throw new Error(`User ${userId} not found.`);
-        }
-        const connection = await JiraConnectionsModel.findByUserId(userId);
-        const siteUrl = connection?.siteUrl ?? "";
-        return {
-          accountId: user.atlassian_account_id,
-          email: user.email,
-          siteName: siteUrl === "" ? "" : MeService.#siteNameFromUrl(siteUrl),
-          siteUrl,
-        };
-      },
-      schema: meResponseSchema,
-      ttlSeconds: config.constants.cache.meAndProjectsTtlSeconds,
-    });
+    return Retry.idempotent(() =>
+      Cache.getOrLoad({
+        key: Cache.keyForMe(userId),
+        load: async () => {
+          const user = await UsersModel.findById(userId);
+          if (user === undefined) {
+            throw new Error(`User ${userId} not found.`);
+          }
+          const connection = await JiraConnectionsModel.findByUserId(userId);
+          const siteUrl = connection?.siteUrl ?? "";
+          return {
+            accountId: user.atlassian_account_id,
+            email: user.email,
+            siteName: siteUrl === "" ? "" : MeService.#siteNameFromUrl(siteUrl),
+            siteUrl,
+          };
+        },
+        schema: meResponseSchema,
+        ttlSeconds: config.constants.cache.meAndProjectsTtlSeconds,
+      }),
+    );
   }
 }

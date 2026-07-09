@@ -45,6 +45,13 @@ export const config = deepFreeze({
     // Prefix on raw API keys, so a leaked key is recognizable in logs/scanners.
     apiKeyPrefix: "ih_",
     apiKeyRandomBytes: 32,
+    // Server-side retry for idempotent read endpoints on a transient failure
+    // (upstream Jira 5xx, or a Redis/lock blip). 3 attempts, full-jitter backoff
+    // starting at 100ms. Creates are never retried here (non-idempotent).
+    apiRetry: {
+      attempts: 3,
+      baseDelayMs: 100,
+    },
     cache: {
       assignableUsersTtlSeconds: 60,
       meAndProjectsTtlSeconds: 300,

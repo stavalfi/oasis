@@ -14,10 +14,10 @@ import { recentTicketsResponseSchema } from "../dto/schemas.ts";
 import type { CreateFindingRequest, CreateFindingResponse, Ticket } from "../dto/types.ts";
 import { jiraClient } from "../jira/jira.ts";
 import type { JiraFieldMeta } from "../jira/types.ts";
+import { Retry } from "../lib/retry.ts";
 import { TicketsModel } from "../models/tickets.ts";
 import { Cache } from "../redis/cache.ts";
-import { InvalidFindingError } from "./errors/invalid-finding-error.ts";
-import { ProjectNotFoundError } from "./errors/project-not-found-error.ts";
+import { InvalidFindingError, ProjectNotFoundError } from "./errors/index.ts";
 import { JiraAccess } from "./jira-access.ts";
 
 export class TicketsService {
@@ -259,11 +259,13 @@ export class TicketsService {
     userId: string;
     projectKey: string;
   }): Promise<Ticket[]> {
-    return Cache.getOrLoad({
-      key: Cache.keyForRecentTickets({ projectKey, userId }),
-      load: () => TicketsService.#loadRecentTickets({ projectKey, userId }),
-      schema: recentTicketsResponseSchema,
-      ttlSeconds: config.constants.cache.recentTicketsTtlSeconds,
-    });
+    return Retry.idempotent(() =>
+      Cache.getOrLoad({
+        key: Cache.keyForRecentTickets({ projectKey, userId }),
+        load: () => TicketsService.#loadRecentTickets({ projectKey, userId }),
+        schema: recentTicketsResponseSchema,
+        ttlSeconds: config.constants.cache.recentTicketsTtlSeconds,
+      }),
+    );
   }
 }

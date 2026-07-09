@@ -12,6 +12,7 @@ import { assigneesResponseSchema, projectsResponseSchema } from "../dto/schemas.
 import { jiraClient } from "../jira/jira.ts";
 import type { JiraFieldMeta } from "../jira/types.ts";
 import { config } from "../config.ts";
+import { Retry } from "../lib/retry.ts";
 import { Cache } from "../redis/cache.ts";
 import { JiraAccess } from "./jira-access.ts";
 
@@ -94,12 +95,14 @@ export class ProjectsService {
    * @param userId - the acting user.
    */
   public static getProjects(userId: string): Promise<Project[]> {
-    return Cache.getOrLoad({
-      key: Cache.keyForProjects(userId),
-      load: () => ProjectsService.#load(userId),
-      schema: projectsResponseSchema,
-      ttlSeconds: config.constants.cache.meAndProjectsTtlSeconds,
-    });
+    return Retry.idempotent(() =>
+      Cache.getOrLoad({
+        key: Cache.keyForProjects(userId),
+        load: () => ProjectsService.#load(userId),
+        schema: projectsResponseSchema,
+        ttlSeconds: config.constants.cache.meAndProjectsTtlSeconds,
+      }),
+    );
   }
 
   /** Load a project's assignable users (uncached). */
@@ -140,11 +143,13 @@ export class ProjectsService {
     userId: string;
     projectKey: string;
   }): Promise<Assignee[]> {
-    return Cache.getOrLoad({
-      key: Cache.keyForAssignableUsers({ projectKey, userId }),
-      load: () => ProjectsService.#loadAssignees({ projectKey, userId }),
-      schema: assigneesResponseSchema,
-      ttlSeconds: config.constants.cache.assignableUsersTtlSeconds,
-    });
+    return Retry.idempotent(() =>
+      Cache.getOrLoad({
+        key: Cache.keyForAssignableUsers({ projectKey, userId }),
+        load: () => ProjectsService.#loadAssignees({ projectKey, userId }),
+        schema: assigneesResponseSchema,
+        ttlSeconds: config.constants.cache.assignableUsersTtlSeconds,
+      }),
+    );
   }
 }
