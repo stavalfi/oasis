@@ -50,9 +50,14 @@ export class TicketsService {
       }
       case "array": {
         const items = Array.isArray(value) ? value : [value];
-        if (field.fieldId === "labels") {
+        if (field.fieldId === "labels" || field.itemsType === "string") {
           return items.map(String);
         }
+        if (field.itemsType === "user") {
+          // Multi-user picker (e.g. an "Owner" field): array of account ids.
+          return items.map((item) => ({ accountId: String(item) }));
+        }
+        // option / version / component / group arrays: array of { id }.
         return items.map((item) => ({ id: String(item) }));
       }
       default: {
@@ -138,7 +143,7 @@ export class TicketsService {
    * @param userId - the acting user.
    * @param input - the validated request body.
    */
-  public static async createFinding({
+  public static createFinding({
     userId,
     input,
   }: {
@@ -147,87 +152,97 @@ export class TicketsService {
   }): Promise<CreateFindingResponse> {
     TicketsService.#validateBaseFields({ description: input.description, title: input.title });
 
-    const connection = await JiraAccess.getFreshConnection(userId);
-    const issueTypeId = await TicketsService.#resolveIssueTypeId({
-      accessToken: connection.accessToken,
-      cloudId: connection.cloudId,
-      projectKey: input.projectKey,
-    });
+    return JiraAccess.withConnection({
+      operation: async (connection) => {
+        const issueTypeId = await TicketsService.#resolveIssueTypeId({
+          accessToken: connection.accessToken,
+          cloudId: connection.cloudId,
+          projectKey: input.projectKey,
+        });
 
-    const fieldMeta = await jiraClient.getIssueTypeFields({
-      accessToken: connection.accessToken,
-      cloudId: connection.cloudId,
-      issueTypeId,
-      projectKey: input.projectKey,
-    });
-    const extraFields = TicketsService.#buildExtraFields({
-      fields: fieldMeta,
-      provided: input.fields ?? {},
-    });
-    // Field id -> human name, so a Jira field error names the field the user
-    // sees ("Budget Amount") instead of the raw id ("customfield_10121").
-    const fieldNames = Object.fromEntries(fieldMeta.map((field) => [field.fieldId, field.name]));
+        const fieldMeta = await jiraClient.getIssueTypeFields({
+          accessToken: connection.accessToken,
+          cloudId: connection.cloudId,
+          issueTypeId,
+          projectKey: input.projectKey,
+        });
+        const extraFields = TicketsService.#buildExtraFields({
+          fields: fieldMeta,
+          provided: input.fields ?? {},
+        });
+        // Field id -> human name, so a Jira field error names the field the user
+        // sees ("Budget Amount") instead of the raw id ("customfield_10121").
+        const fieldNames = Object.fromEntries(
+          fieldMeta.map((field) => [field.fieldId, field.name]),
+        );
 
-    const created = await jiraClient.createIssue({
-      accessToken: connection.accessToken,
-      cloudId: connection.cloudId,
-      description: input.description,
-      extraFields,
-      fieldNames,
-      issueTypeId,
-      projectKey: input.projectKey,
-      title: input.title,
-    });
+        const created = await jiraClient.createIssue({
+          accessToken: connection.accessToken,
+          cloudId: connection.cloudId,
+          description: input.description,
+          extraFields,
+          fieldNames,
+          issueTypeId,
+          projectKey: input.projectKey,
+          title: input.title,
+        });
 
-    await TicketsModel.insert({
-      jiraIssueKey: created.key,
-      projectKey: input.projectKey,
+        await TicketsModel.insert({
+          jiraIssueKey: created.key,
+          projectKey: input.projectKey,
+          userId,
+        });
+        await Cache.invalidate(Cache.keyForRecentTickets({ projectKey: input.projectKey, userId }));
+
+        return { key: created.key, url: `${connection.siteUrl}/browse/${created.key}` };
+      },
       userId,
     });
-    await Cache.invalidate(Cache.keyForRecentTickets({ projectKey: input.projectKey, userId }));
-
-    return { key: created.key, url: `${connection.siteUrl}/browse/${created.key}` };
   }
 
   /** Load recent app-created tickets for a project with live titles (uncached). */
-  static async #loadRecentTickets({
+  static #loadRecentTickets({
     userId,
     projectKey,
   }: {
     userId: string;
     projectKey: string;
   }): Promise<Ticket[]> {
-    const connection = await JiraAccess.getFreshConnection(userId);
-    // Project-scoped: every app-created ticket for this project, regardless of
-    // which app user created it. Titles + reporter are read live from Jira.
-    const rows = await TicketsModel.listRecent({
-      limit: config.constants.recentTicketsLimit,
-      projectKey,
-    });
-    const tickets = await Promise.all(
-      rows.map(async (row): Promise<Ticket | undefined> => {
-        const details = await jiraClient.getIssueDetails({
-          accessToken: connection.accessToken,
-          cloudId: connection.cloudId,
-          issueKey: row.jira_issue_key,
+    return JiraAccess.withConnection({
+      operation: async (connection) => {
+        // Project-scoped: every app-created ticket for this project, regardless of
+        // which app user created it. Titles + reporter are read live from Jira.
+        const rows = await TicketsModel.listRecent({
+          limit: config.constants.recentTicketsLimit,
+          projectKey,
         });
-        // Dropped if the issue no longer exists in Jira (deleted) or isn't
-        // visible from this connection, so the list never shows a dead link.
-        if (details === undefined) {
-          return undefined;
-        }
-        return {
-          createdAt: row.created_at.toISOString(),
-          key: row.jira_issue_key,
-          reporter: details.reporter ?? "Unknown",
-          title: details.title ?? row.jira_issue_key,
-          url: `${connection.siteUrl}/browse/${row.jira_issue_key}`,
-          ...(details.priority === undefined ? {} : { priority: details.priority }),
-          ...(details.status === undefined ? {} : { status: details.status }),
-        };
-      }),
-    );
-    return tickets.filter((ticket): ticket is Ticket => ticket !== undefined);
+        const tickets = await Promise.all(
+          rows.map(async (row): Promise<Ticket | undefined> => {
+            const details = await jiraClient.getIssueDetails({
+              accessToken: connection.accessToken,
+              cloudId: connection.cloudId,
+              issueKey: row.jira_issue_key,
+            });
+            // Dropped if the issue no longer exists in Jira (deleted) or isn't
+            // visible from this connection, so the list never shows a dead link.
+            if (details === undefined) {
+              return undefined;
+            }
+            return {
+              createdAt: row.created_at.toISOString(),
+              key: row.jira_issue_key,
+              reporter: details.reporter ?? "Unknown",
+              title: details.title ?? row.jira_issue_key,
+              url: `${connection.siteUrl}/browse/${row.jira_issue_key}`,
+              ...(details.priority === undefined ? {} : { priority: details.priority }),
+              ...(details.status === undefined ? {} : { status: details.status }),
+            };
+          }),
+        );
+        return tickets.filter((ticket): ticket is Ticket => ticket !== undefined);
+      },
+      userId,
+    });
   }
 
   /**

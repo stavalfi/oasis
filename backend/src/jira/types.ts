@@ -57,5 +57,7 @@ export interface JiraFieldMeta {
   name: string;
   required: boolean;
   schemaType: string | undefined;
+  /** For array fields, the element type (e.g. "user", "option", "string"). */
+  itemsType: string | undefined;
   allowedValues: JiraAllowedValue[] | undefined;
 }

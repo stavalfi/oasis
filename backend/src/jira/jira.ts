@@ -86,7 +86,9 @@ export class JiraClient {
         }
       }
     }
-    return reasons.length === 0 ? undefined : reasons.join(" ");
+    // One reason per line, so the UI can render each on its own row and bold
+    // the field name (the part before the colon).
+    return reasons.length === 0 ? undefined : reasons.join("\n");
   }
 
   /** Convert plain text to a minimal Atlassian Document Format document. */
@@ -170,7 +172,9 @@ export class JiraClient {
       },
       method: "post",
     });
-    if (response.status === 400) {
+    // Atlassian rejects an expired/already-rotated refresh token with 400 or 403
+    // (invalid_grant / unauthorized_client). Both mean the user must reconnect.
+    if (response.status === 400 || response.status === 403) {
       throw new RefreshTokenExpiredError();
     }
     if (!response.ok) {
@@ -338,6 +342,7 @@ export class JiraClient {
     return (fieldsSchema.parse(data).fields ?? []).map((field) => ({
       allowedValues: field.allowedValues,
       fieldId: field.fieldId,
+      itemsType: field.schema?.items,
       name: field.name,
       required: field.required,
       schemaType: field.schema?.type,

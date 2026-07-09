@@ -47,8 +47,6 @@
     "oxlint",
     "oxfmt",
     "prettier",
-    // Browser-automation tool for local/e2e use; not statically imported.
-    "playwright",
     // Used by the generated SDK (which itself is in `ignore` above).
     "@hey-api/client-fetch",
     // Invoked via `bunx @hey-api/openapi-ts` in codegen/rauthy-gen-types.ts — not a static import.
@@ -91,6 +89,7 @@
     "@types/pg",
     "@hono/zod-openapi",
     "ioredis",
+    "@sesamecare-oss/redlock",
     "cache-manager",
     "keyv",
     "@keyv/redis",

@@ -91,6 +91,20 @@ export const config = deepFreeze({
     // A finding maps to a Task; fall back to the project's first issue type.
     preferredIssueTypeName: "Task",
     recentTicketsLimit: 10,
+    // Per-user distributed lock (redlock) guarding token refresh, so concurrent
+    // requests (including across pods) don't each spend the same rotating
+    // refresh token. Values map to redlock's Settings.
+    refreshLock: {
+      // Auto-extend the lock when it is within this many ms of expiring, so a
+      // slow refresh round-trip never loses the lock mid-flight.
+      extensionThresholdMs: 500,
+      // Acquire attempts, spacing, and jitter while another request holds it.
+      retryCount: 50,
+      retryDelayMs: 100,
+      retryJitterMs: 100,
+      // Lock lifetime; comfortably longer than one token refresh round-trip.
+      ttlSeconds: 10,
+    },
     sessionCookieName: "ih_session",
     sessionIdRandomBytes: 32,
     sessionTtlSeconds: 12 * 60 * 60,

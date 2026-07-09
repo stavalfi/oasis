@@ -31,6 +31,7 @@ export class ProjectsService {
   static #toFieldMeta(field: JiraFieldMeta): FieldMeta {
     return {
       ...(field.allowedValues === undefined ? {} : { allowedValues: field.allowedValues }),
+      ...(field.itemsType === undefined ? {} : { itemsType: field.itemsType }),
       fieldId: field.fieldId,
       name: field.name,
       required: field.required,
@@ -42,45 +43,49 @@ export class ProjectsService {
    * Load creatable projects with their issue type and dynamic fields (uncached).
    * A project with no creatable issue type is skipped.
    */
-  static async #load(userId: string): Promise<Project[]> {
-    const connection = await JiraAccess.getFreshConnection(userId);
-    const projects = await jiraClient.searchCreatableProjects({
-      accessToken: connection.accessToken,
-      cloudId: connection.cloudId,
+  static #load(userId: string): Promise<Project[]> {
+    return JiraAccess.withConnection({
+      operation: async (connection) => {
+        const projects = await jiraClient.searchCreatableProjects({
+          accessToken: connection.accessToken,
+          cloudId: connection.cloudId,
+        });
+
+        const builtProjects = await Promise.all(
+          projects.map(async (project): Promise<Project | undefined> => {
+            const issueTypes = await jiraClient.getIssueTypes({
+              accessToken: connection.accessToken,
+              cloudId: connection.cloudId,
+              projectKey: project.key,
+            });
+            const issueType =
+              issueTypes.find((type) => type.name === config.constants.preferredIssueTypeName) ??
+              issueTypes[0];
+            if (issueType === undefined) {
+              return undefined;
+            }
+            const fields = await jiraClient.getIssueTypeFields({
+              accessToken: connection.accessToken,
+              cloudId: connection.cloudId,
+              issueTypeId: issueType.id,
+              projectKey: project.key,
+            });
+            return {
+              fields: fields
+                .filter((field) => ProjectsService.#shouldRenderField(field))
+                .map((field) => ProjectsService.#toFieldMeta(field)),
+              issueTypeId: issueType.id,
+              issueTypeName: issueType.name,
+              key: project.key,
+              name: project.name,
+            };
+          }),
+        );
+
+        return builtProjects.filter((project): project is Project => project !== undefined);
+      },
+      userId,
     });
-
-    const builtProjects = await Promise.all(
-      projects.map(async (project): Promise<Project | undefined> => {
-        const issueTypes = await jiraClient.getIssueTypes({
-          accessToken: connection.accessToken,
-          cloudId: connection.cloudId,
-          projectKey: project.key,
-        });
-        const issueType =
-          issueTypes.find((type) => type.name === config.constants.preferredIssueTypeName) ??
-          issueTypes[0];
-        if (issueType === undefined) {
-          return undefined;
-        }
-        const fields = await jiraClient.getIssueTypeFields({
-          accessToken: connection.accessToken,
-          cloudId: connection.cloudId,
-          issueTypeId: issueType.id,
-          projectKey: project.key,
-        });
-        return {
-          fields: fields
-            .filter((field) => ProjectsService.#shouldRenderField(field))
-            .map((field) => ProjectsService.#toFieldMeta(field)),
-          issueTypeId: issueType.id,
-          issueTypeName: issueType.name,
-          key: project.key,
-          name: project.name,
-        };
-      }),
-    );
-
-    return builtProjects.filter((project): project is Project => project !== undefined);
   }
 
   /**
@@ -98,23 +103,27 @@ export class ProjectsService {
   }
 
   /** Load a project's assignable users (uncached). */
-  static async #loadAssignees({
+  static #loadAssignees({
     userId,
     projectKey,
   }: {
     userId: string;
     projectKey: string;
   }): Promise<Assignee[]> {
-    const connection = await JiraAccess.getFreshConnection(userId);
-    const users = await jiraClient.getAssignableUsers({
-      accessToken: connection.accessToken,
-      cloudId: connection.cloudId,
-      projectKey,
+    return JiraAccess.withConnection({
+      operation: async (connection) => {
+        const users = await jiraClient.getAssignableUsers({
+          accessToken: connection.accessToken,
+          cloudId: connection.cloudId,
+          projectKey,
+        });
+        return users.map((user) => ({
+          accountId: user.accountId,
+          displayName: user.displayName ?? user.accountId,
+        }));
+      },
+      userId,
     });
-    return users.map((user) => ({
-      accountId: user.accountId,
-      displayName: user.displayName ?? user.accountId,
-    }));
   }
 
   /**

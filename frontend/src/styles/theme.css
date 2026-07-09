@@ -415,6 +415,14 @@ select.field__input {
   border: 1px solid var(--c-danger-border);
 }
 
+.banner__line {
+  margin: 0;
+}
+
+.banner__line + .banner__line {
+  margin-top: 4px;
+}
+
 .banner--success {
   display: flex;
   flex-direction: column;

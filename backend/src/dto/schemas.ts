@@ -28,6 +28,9 @@ export const allowedValueSchema = z.object({
 export const fieldMetaSchema = z.object({
   allowedValues: z.array(allowedValueSchema).optional(),
   fieldId: z.string(),
+  // For array fields, the element type ("user", "option", "string", ...) so the
+  // UI can render a user field as a picker rather than a free-text box.
+  itemsType: z.string().optional(),
   name: z.string(),
   required: z.boolean(),
   type: z.string(),

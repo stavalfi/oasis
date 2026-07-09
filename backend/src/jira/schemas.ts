@@ -44,7 +44,7 @@ export const fieldsSchema = z.object({
         fieldId: z.string(),
         name: z.string(),
         required: z.boolean(),
-        schema: z.object({ type: z.string() }).optional(),
+        schema: z.object({ items: z.string().optional(), type: z.string() }).optional(),
       }),
     )
     .optional(),
