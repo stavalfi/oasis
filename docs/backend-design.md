@@ -39,8 +39,8 @@ This document covers the backend only. The UI is in
 ## Stack
 
 - Runtime: Node.js runs the backend (it strips TypeScript types natively, so the
-  `.ts` sources run without a build step). Bun is only the package manager and
-  the frontend bundler/runner. Language: TypeScript.
+  `.ts` sources run without a build step). Bun is only the package manager;
+  Vite builds the frontend. Language: TypeScript.
 - Backend: Hono, with `@hono/zod-openapi` so one Zod schema per route both
   validates the request and types the handler.
 - Database: Postgres, accessed statelessly (see Multi-tenant isolation).
@@ -51,9 +51,15 @@ This document covers the backend only. The UI is in
   retry honoring `Retry-After` on 429/503.
 - TypeScript in strictest mode; oxlint and oxfmt in strict mode, no warnings.
 - Transport: the server runs over plain HTTP locally on a single origin
-  (`http://localhost:3000`), which also serves the built frontend. The session
-  cookie is not marked `Secure` (a Secure cookie is never sent over HTTP).
-- Frontend: minimal React SPA.
+  (`http://localhost:3000`). The session cookie is not marked `Secure` (a Secure
+  cookie is never sent over HTTP). There is no TLS/self-signed-certificate code.
+- Single origin: the backend also serves the Vite-built React SPA as static
+  files from `frontend/dist` (via `@hono/node-server/serve-static`, with an
+  `index.html` SPA fallback for client-side routes). Because the app and the API
+  share one origin, the session cookie and the OAuth callback work with no proxy
+  and no CORS.
+- Frontend: minimal React SPA, built with Vite (`vite.config.ts` at the repo
+  root, `root = frontend/src`, `outDir = frontend/dist`).
 - One command runs everything (see Run locally).
 
 ## Code structure and conventions
@@ -96,11 +102,17 @@ Rules:
   connection is interchangeable and nothing leaks between requests.
 
 Migrations and types: Kysely migrations live under `db/migrations`. The backend
-start script (`backend/scripts/start.sh`, run by `bun run backend`) does three
-steps in order: (1) apply migrations, (2) generate the Kysely schema types from
-the live database with `kysely-codegen` into `db/schema.ts`, (3) start the
-server. So the types always match the migrated database, and `db/schema.ts` is
-generated, never hand-edited. Schema changes are always a new migration.
+launcher (`backend/scripts/start.ts`, a TypeScript program run by `bun run
+backend` as `node --env-file .env backend/scripts/start.ts`) does, in order: (1)
+apply migrations, (2) generate the Kysely schema types from the live database
+with `kysely-codegen` into `db/schema.ts`, (3) run `vite build` to produce
+`frontend/dist`, (4) start a background `vite build --watch` so frontend edits
+rebuild automatically, then (5) start the server (its JSON logs piped through
+`pino-pretty`). A single `AbortController` ties every child process to the
+launcher, so `SIGINT`/`SIGTERM` (or the server exiting) tears the watcher and
+pretty-printer down cleanly. So the types always match the migrated database, and
+`db/schema.ts` is generated, never hand-edited. Schema changes are always a new
+migration.
 
 Connection pool: fixed size, `min = max = 10`. The pool holds a constant 10
 Postgres connections, so behavior under load is predictable and there is no
@@ -147,8 +159,9 @@ Constant values (hard-coded in `config.ts`, not from the environment):
 | constants.recentTicketsLimit              | Max tickets in the Recent Tickets view  | number        | 10          |
 | constants.cache.meAndProjectsTtlSeconds   | Cache TTL for /api/me and /api/projects | number (s)    | 300         |
 | constants.cache.recentTicketsTtlSeconds   | Cache TTL for recent tickets            | number (s)    | 10          |
+| constants.cache.assignableUsersTtlSeconds | Cache TTL for a project's assignees     | number (s)    | 60          |
 | constants.sessionTtlSeconds               | Session lifetime                        | number (s)    | 43200 (12h) |
-| constants.apiKeyExpiryDays                | API key lifetime                        | number (days) | 90          |
+| constants.apiKeyMaxExpiryDays             | Upper bound on a requested key lifetime | number (days) | 3650        |
 | constants.validation.titleMaxLength       | Max title (Jira summary) length         | number        | 255         |
 | constants.validation.descriptionMaxLength | Max description length                  | number        | 32767       |
 | postgres.poolMin                          | Postgres pool min connections           | number        | 10          |
@@ -222,8 +235,10 @@ live only on the backend. The browser holds only an opaque session cookie.
 
 - `session_id`: random opaque value. Not a JWT, not derived from the Jira token.
 - Stored server side: `session_id -> user_id, expires_at`.
-- Cookie flags: `HttpOnly` (JS cannot read it), `Secure` (HTTPS only),
-  `SameSite=Lax` (not sent on cross site requests, blocks CSRF).
+- Cookie flags: `HttpOnly` (JS cannot read it) and `SameSite=Lax` (not sent on
+  cross site requests, blocks CSRF). Not `Secure`: the POC is served over plain
+  HTTP and a Secure cookie is never sent over HTTP. In production over HTTPS this
+  would be `Secure`.
 - Rolling (sliding) session. TTL is 12 hours of inactivity. On each authenticated
   request the backend extends `expires_at` to now + 12h, so an active user stays
   logged in and only 12 hours of no activity expires the session.
@@ -297,21 +312,33 @@ complexity beyond this exercise.
 API keys are how machines authenticate. They are created by a human, then
 configured into a scanner or CI system.
 
-- Creation: a logged-in user calls `POST /api/api-keys` with a `name` (a human
-  label for the service account, for example `prod-scanner`). The backend
-  generates a random key and returns it once, along with `id`, `name`,
-  `createdAt`, and `expiresAt`. It stores only the key hash, bound to that user.
+- Creation: a logged-in user calls `POST /api/api-keys` with `{ name,
+expiresInDays }` (`name` is a human label for the service account, for example
+  `prod-scanner`; `expiresInDays` is how long the key stays valid, bounded by
+  `constants.apiKeyMaxExpiryDays` = 3650). The UI offers presets (1 day, 30 days,
+  12 months) or a custom number of days. The backend generates a random key and
+  returns it once, along with `id`, `name`, `createdAt`, and `expiresAt`. It
+  stores only the key hash, bound to that user.
 - Listing: `GET /api/api-keys` returns metadata only (`id`, `name`, `createdAt`,
   `lastUsedAt`, `expiresAt`), never the raw key.
 - Use: the machine sends `Authorization: Bearer <api_key>`. The backend hashes
   the presented key, finds the owning user, and acts as that user.
-- Expiry: each key has `expires_at` (90 days). The machine auth path rejects an
-  expired or revoked key with 401.
+- Expiry: each key has `expires_at` (from the requested `expiresInDays`). The
+  machine auth path rejects an expired or revoked key with 401.
 - Rotation without downtime: create a new key, update the machine to use it,
   then revoke the old one. A user may hold more than one active key.
 - Revocation: `DELETE /api/api-keys/:id` deletes the row; the key stops working
   immediately. A revoked key no longer matches any stored hash, so it is
   rejected as invalid.
+
+An API key's lifetime is independent of the user's Jira OAuth connection. The key
+only identifies which user a machine call acts as; the actual Jira access uses
+that user's stored OAuth tokens. Atlassian refresh tokens rotate on each refresh
+and lapse after roughly 90 days of inactivity, so if a key sits unused past that
+window (and no human logs in), the refresh token expires. A machine call with a
+still-valid API key then fails with 401 "Your Jira connection needs to be
+re-established" until a human re-authenticates through the browser OAuth flow,
+which mints a fresh refresh token. The API key itself is not invalidated.
 
 ## API surface
 
@@ -325,19 +352,20 @@ Public machine API, versioned because it is an external contract:
 
 Internal browser API, unversioned because it ships with the frontend:
 
-| Method and path                 | Purpose                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| GET /                           | Serve the SPA shell (public, sent before JS loads)                                   |
-| GET /auth/login                 | Start OAuth login                                                                    |
-| GET /auth/callback              | OAuth redirect target                                                                |
-| POST /auth/logout               | End the session                                                                      |
-| GET /api/me                     | Current user profile and connected Jira site                                         |
-| GET /api/projects               | List creatable projects with their issue types and required fields (from createmeta) |
-| POST /api/tickets               | Create a ticket from the UI                                                          |
-| GET /api/tickets?projectKey=... | Recent tickets for a project (max 10)                                                |
-| GET /api/api-keys               | List the user's API keys (metadata only)                                             |
-| POST /api/api-keys              | Create an API key (returned once)                                                    |
-| DELETE /api/api-keys/:id        | Revoke an API key                                                                    |
+| Method and path                  | Purpose                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| GET /                            | Serve the SPA shell (public, sent before JS loads)                                   |
+| GET /auth/login                  | Start OAuth login                                                                    |
+| GET /auth/callback               | OAuth redirect target                                                                |
+| POST /auth/logout                | End the session                                                                      |
+| GET /api/me                      | Current user profile and connected Jira site                                         |
+| GET /api/projects                | List creatable projects with their issue types and required fields (from createmeta) |
+| GET /api/projects/:key/assignees | Users who can be assigned issues in the project (for the assignee picker)            |
+| POST /api/tickets                | Create a ticket from the UI                                                          |
+| GET /api/tickets?projectKey=...  | Recent tickets for a project (max 10)                                                |
+| GET /api/api-keys                | List the user's API keys (metadata only)                                             |
+| POST /api/api-keys               | Create an API key (returned once)                                                    |
+| DELETE /api/api-keys/:id         | Revoke an API key                                                                    |
 
 Operational, unauthenticated:
 
@@ -389,15 +417,27 @@ Operational, unauthenticated:
 - `POST /api/v1/findings`, REST conventions.
 - Auth: `Authorization: Bearer <api_key>`.
 - Validates input against the project's createmeta: projectKey required, title
-  required (non-empty, max `titleMaxLength` 255), description max
-  `descriptionMaxLength`, plus any field the project marks required. Curated
+  required (non-empty, max `titleMaxLength` 255), description required (non-empty,
+  max `descriptionMaxLength`), plus any field the project marks required. Curated
   optional fields (priority, labels, assignee, due date, components) are accepted
   when provided and validated against their `allowedValues`. The same length
   limits are enforced here as in the UI, from the same config values, so a
   bypassed or malicious client cannot exceed them.
-- Status codes: 201 created, 400 bad input or missing required field,
-  401 bad/missing/expired key, 404 project not found, 502 Jira upstream error.
+- Field value shaping: each curated/required field is converted to the shape Jira
+  expects before create. A user field (assignee) is sent as `{ accountId }`;
+  priority/option fields as `{ id }`; date fields as a `yyyy-MM-dd` string; the
+  `labels` array as `string[]`; other array fields as `[{ id }]`.
+- Status codes: 201 created; 400 for bad input, a missing required field, or a
+  field value Jira rejects (see error surfacing below); 401 bad/missing/expired
+  key; 404 project not found; 502 only for a genuine Jira upstream failure.
 - Returns the created issue key and url.
+
+Error surfacing: when Jira returns a 4xx (it received the request but rejected
+our data, for example an invalid field value), the backend extracts Jira's own
+reason from its `{ errorMessages, errors: { <field>: <reason> } }` body and
+returns it as a 400 so the caller can fix the input. Only true upstream failures
+(5xx or network errors) stay a 502 "We couldn't reach Jira". Every error response
+has the same body shape, `{ message }`.
 
 ## Jira client and rate limiting
 
@@ -425,10 +465,12 @@ Generated client:
 - Direct `fetch` is banned repo-wide by lint; the generated client's transport is
   overridden with `ky` (see Rate limiting). We do not write fetch calls or Jira
   types by hand.
-- Not covered by this spec: the OAuth token exchange
-  (`auth.atlassian.com/oauth/token`), `accessible-resources`, and the `/me`
-  identity call (both on `api.atlassian.com`). Those are three small
-  hand-written calls (also `ky`) that live as methods on the same `JiraClient`.
+- Not covered by the filtered generated client: the OAuth token exchange
+  (`auth.atlassian.com/oauth/token`), `accessible-resources`, the `/me` identity
+  call (both on `api.atlassian.com`), and the assignable-users search
+  (`/rest/api/3/user/assignable/search?project=<key>`, capped at
+  `constants.jira.assignableUsersPageSize` = 100). Those are small hand-written
+  calls (also `ky`) that live as methods on the same `JiraClient`.
 
 Rate limiting:
 
@@ -445,8 +487,8 @@ Rate limiting:
   create, matching Atlassian's guidance.
 - If retries are exhausted, the Jira call fails and the caller gets 502 (or the
   create endpoint surfaces a clear "Jira is rate limiting, try again" message).
-- Retries and rate-limit responses are logged (with the request id), so 429s and
-  backoff are visible in the structured logs.
+- Retries and rate-limit responses are logged, so 429s and backoff are visible in
+  the structured logs.
 
 ## Caching
 
@@ -460,11 +502,12 @@ TTL, and invalidation rule.
 
 ### Per-endpoint cache policy
 
-| Endpoint                    | Cache key                                | TTL  | Invalidated by                          |
-| --------------------------- | ---------------------------------------- | ---- | --------------------------------------- |
-| GET /api/me                 | `me:{user_id}`                           | 300s | logout, reconnect                       |
-| GET /api/projects           | `projects:{user_id}`                     | 300s | reconnect (new Jira connection)         |
-| GET /api/tickets?projectKey | `recent_tickets:{user_id}:{project_key}` | 10s  | ticket create for that user and project |
+| Endpoint                         | Cache key                                  | TTL  | Invalidated by                          |
+| -------------------------------- | ------------------------------------------ | ---- | --------------------------------------- |
+| GET /api/me                      | `me:{user_id}`                             | 300s | logout, reconnect                       |
+| GET /api/projects                | `projects:{user_id}`                       | 300s | reconnect (new Jira connection)         |
+| GET /api/projects/:key/assignees | `assignable_users:{user_id}:{project_key}` | 60s  | TTL only (short, so new users show up)  |
+| GET /api/tickets?projectKey      | `recent_tickets:{user_id}:{project_key}`   | 10s  | ticket create for that user and project |
 
 `GET /api/api-keys` is not cached: key lists change on explicit user action and
 must always reflect the current state.
@@ -520,11 +563,11 @@ functional result here.
 ### Logs
 
 - Structured JSON logs via `pino`. One logger, injected through the layers.
-- Every request gets a `request_id` (generated at the edge, or taken from an
-  inbound `x-request-id`). It is attached to the logger and included in every log
-  line for that request, so a request can be traced across layers.
-- Standard fields on request logs: `request_id`, `method`, `route`, `status`,
-  `duration_ms`, and `user_id` when authenticated.
+- The request middleware attaches that logger to the request context and logs a
+  one-line summary per request. There is no `request_id` (no `x-request-id`
+  header, no per-request child logger); it was dropped as unnecessary for the POC.
+- Standard fields on request logs: `method`, `route`, `status`, `duration_ms`,
+  and `user_id` when authenticated.
 - Secrets are never logged: tokens, API keys, cookies, and the client secret are
   redacted by a pino redaction list.
 - Log levels: `error` for handled failures and 5xx, `warn` for 4xx and auth
@@ -592,7 +635,7 @@ sequenceDiagram
   Backend->>DB: upsert users row
   Backend->>DB: encrypt tokens, store jira_connections (user, cloud_id)
   Backend->>DB: create session (random session_id, expiry)
-  Backend-->>Browser: Set-Cookie session_id (HttpOnly, Secure, SameSite=Lax), 302 to /
+  Backend-->>Browser: Set-Cookie session_id (HttpOnly, SameSite=Lax), 302 to /
 ```
 
 ### 2. Second login (second tab, session still valid)
@@ -752,16 +795,16 @@ callback URL above and the scopes listed in Assumptions.
 The assignment lets us choose which Jira projects and fields to support. What we
 chose and why.
 
-| Area                        | Decision                                                                                                                                                        | Reason                                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Projects                    | Only projects the user can create issues in, from the per-project createmeta endpoints (`getCreateIssueMetaIssueTypes`, `getCreateIssueMetaIssueTypeId`)        | `project/search` also returns browse-only projects that would 403 on create. The bulk `createmeta` is deprecated. |
-| Issue type                  | Always `Task`, validated per project, falling back to the first issue type the project allows if `Task` is absent                                               | A finding maps to a task; no value in exposing Bug or Story.                                                      |
-| Base fields                 | Title to `summary`, Description to `description`, always shown                                                                                                  | Required by the assignment; minimal and intuitive.                                                                |
-| Required fields             | Every field the project marks required is rendered dynamically                                                                                                  | So create never fails on a project that requires extra fields.                                                    |
-| Optional fields             | A curated set shown only when the project exposes them: priority, labels, assignee, due date, components                                                        | Useful for a real finding without supporting every field.                                                         |
-| Field rendering             | Text fields as inputs, enum fields (priority, selects) as dropdowns of their `allowedValues`, labels as a tag input                                             | Driven by createmeta `required` flag and `allowedValues`.                                                         |
-| Marking app-created tickets | Our `tickets` table stores only issue keys we created (scoped by user; titles fetched live from Jira) plus a Jira label `identityhub-finding`                   | Table is the source of truth for the Recent view; the label is durable and survives a DB reset.                   |
-| Out of scope                | Optional fields outside the curated set, arbitrary custom fields, editing/transitioning/deleting issues, attachments, JSM request types, subtasks, epics, links | Not needed for the POC.                                                                                           |
+| Area                        | Decision                                                                                                                                                                                                                                                          | Reason                                                                                                                                                                     |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Projects                    | Only projects the user can create issues in, from the per-project createmeta endpoints (`getCreateIssueMetaIssueTypes`, `getCreateIssueMetaIssueTypeId`)                                                                                                          | `project/search` also returns browse-only projects that would 403 on create. The bulk `createmeta` is deprecated.                                                          |
+| Issue type                  | Always `Task`, validated per project, falling back to the first issue type the project allows if `Task` is absent                                                                                                                                                 | A finding maps to a task; no value in exposing Bug or Story.                                                                                                               |
+| Base fields                 | Title to `summary` and Description to `description`, both always shown and both required                                                                                                                                                                          | Required by the assignment; minimal and intuitive.                                                                                                                         |
+| Required fields             | Every field the project marks required is rendered dynamically                                                                                                                                                                                                    | So create never fails on a project that requires extra fields.                                                                                                             |
+| Optional fields             | A curated set shown only when the project exposes them: priority, labels, assignee, due date, components                                                                                                                                                          | Useful for a real finding without supporting every field.                                                                                                                  |
+| Field rendering             | Text fields as inputs, date fields as a date picker (submitting only valid `yyyy-MM-dd`), enum fields (priority, selects) as dropdowns of their `allowedValues`, the assignee (user) field as a dropdown of the project's assignable users, labels as a tag input | Driven by createmeta `required` flag, `schema.type`, and `allowedValues`; the assignee list comes from the assignable-users endpoint so only a valid account is ever sent. |
+| Marking app-created tickets | Our `tickets` table stores only issue keys we created (scoped by user; titles fetched live from Jira) plus a Jira label `identityhub-finding`                                                                                                                     | Table is the source of truth for the Recent view; the label is durable and survives a DB reset.                                                                            |
+| Out of scope                | Optional fields outside the curated set, arbitrary custom fields, editing/transitioning/deleting issues, attachments, JSM request types, subtasks, epics, links                                                                                                   | Not needed for the POC.                                                                                                                                                    |
 
 ---
 

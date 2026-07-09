@@ -22,8 +22,11 @@ frontend only. The backend is in [docs/backend-design.md](./backend-design.md).
 
 ## Stack
 
-- Runtime: the browser. Bun does not run the frontend; it builds it.
-- Build: Bun (`bun build`) bundles the React app; Bun also serves it in dev.
+- Runtime: the browser.
+- Build: Vite bundles the React app into `frontend/dist`; the backend serves that
+  build as static files on the same origin as the API. `bun run frontend:build`
+  runs `vite build`; the backend launcher also runs it (and a `--watch` rebuild)
+  on `bun run backend`. There is no separate `bun run frontend` dev server.
 - UI: React + TypeScript.
 - State: Redux Toolkit (slices + async thunks).
 - No Jira token ever reaches this layer. The frontend talks only to our backend
@@ -37,10 +40,17 @@ frontend/src/
   pages/        one component per route (LoginPage, DashboardPage, ApiKeysPage).
   components/   shared UI (ProjectPicker, CreateFindingForm, RecentTicketsList).
   store/        Redux store, slices, and async thunks.
-  api/          typed Hono RPC client (hc<AppType>).
-  index.html    HTML shell; Bun serves and bundles from it.
+  client.ts     typed Hono RPC client (hc<AppType>) and the thin call wrappers.
+  styles/       theme.css, the single global stylesheet.
+  index.html    HTML shell; Vite's entry, links the Inter font and theme.css.
   main.tsx      entry point, loaded by index.html.
 ```
+
+`AppType` is imported from the backend with a top-level `import type` (enforced
+by the `import/consistent-type-specifier-style` = `prefer-top-level` lint rule).
+Under `verbatimModuleSyntax`, the inline `import { type AppType }` form would
+leave a side-effect import that drags the whole backend (redis, kysely, pg) into
+the browser bundle; the top-level `import type` is erased entirely.
 
 ## Responsibilities and non-goals
 
@@ -135,11 +145,17 @@ project so the new ticket appears.
 
 `CreateFindingForm` is built dynamically from the selected project's
 `createmeta` (delivered with the project list). It always shows Title and
-Description, adds every field the project marks required, and adds a curated set
-of important optional fields when the project exposes them (priority, labels,
-assignee, due date, components). Text fields render as inputs, enum fields as
-dropdowns of their `allowedValues`, labels as a tag input. Required fields must
-be filled; optional ones may be left blank. Other optional fields are not shown.
+Description (both required, marked with a red `*`), adds every field the project
+marks required, and adds a curated set of important optional fields when the
+project exposes them (priority, labels, assignee, due date, components), each
+labelled `(optional)`. Text fields render as inputs, date fields as a native date
+picker (only a valid `yyyy-MM-dd` is submitted, so a stale draft value the picker
+cannot display is never sent), enum fields as dropdowns of their `allowedValues`,
+labels as a tag input, and the assignee (user) field as a dropdown of the
+project's assignable users. That list comes from `GET
+/api/projects/:key/assignees`, fetched when the project is selected, so only a
+valid account is ever sent. Required fields must be filled; optional ones may be
+left blank.
 
 ### Draft persistence
 
@@ -162,55 +178,55 @@ types are inferred end to end with no codegen and no generated client, so a rout
 change is a compile error here. The client sends credentials (the session
 cookie) with each request. Each thunk wraps one typed call.
 
-| Thunk              | Method and path                 |
-| ------------------ | ------------------------------- |
-| fetchCurrentUser   | GET /api/me                     |
-| logout             | POST /auth/logout               |
-| fetchProjects      | GET /api/projects               |
-| createFinding      | POST /api/tickets               |
-| fetchRecentTickets | GET /api/tickets?projectKey=... |
-| fetchApiKeys       | GET /api/api-keys               |
-| createApiKey       | POST /api/api-keys              |
-| revokeApiKey       | DELETE /api/api-keys/:id        |
+| Call               | Method and path                              |
+| ------------------ | -------------------------------------------- |
+| fetchCurrentUser   | GET /api/me                                  |
+| logout             | POST /auth/logout                            |
+| fetchProjects      | GET /api/projects                            |
+| fetchAssignees     | GET /api/projects/:key/assignees             |
+| createFinding      | POST /api/tickets                            |
+| fetchRecentTickets | GET /api/tickets?projectKey=...              |
+| fetchApiKeys       | GET /api/api-keys                            |
+| createApiKey       | POST /api/api-keys `{ name, expiresInDays }` |
+| revokeApiKey       | DELETE /api/api-keys/:id                     |
+
+Most calls are wrapped by a thunk; `fetchAssignees` is called directly from
+`CreateFindingForm` (into local state) when the selected project changes, not via
+a thunk.
 
 A 401 from any call resets `authSlice` to `loggedOut` and redirects to
 `/login`, which covers session expiry transparently.
 
 ## Styling
 
-CSS Modules, one `.module.css` file per component, imported as typed styles.
+A single global stylesheet, `frontend/src/styles/theme.css`, linked from
+`index.html`. No CSS Modules and no CSS-in-JS: this is a Jira tool, so the theme
+is built on the Atlassian Design System (ADS) language to feel native to Jira.
 
-- Scoping: each class is local to its component, so names never collide and there
-  is no global stylesheet to reason about. This is the safe default for someone
-  who does not want to manage CSS specificity by hand.
-- Typed classes: a Bun/TypeScript plugin generates types for `styles.x`, so a
-  wrong class name is a compile error and editor autocomplete lists the classes.
-- Modern syntax: use CSS nesting and CSS custom properties (variables) natively,
-  no preprocessor. A single `theme.css` defines design tokens (colors, spacing,
-  font sizes, radii) as `:root` custom properties; components reference the
-  tokens, so the look is consistent and a change is one edit.
-- Dark mode and contrast come free from the tokens via `light-dark()` and a
-  `prefers-color-scheme` block, no per-component work.
+- Design tokens: `:root` custom properties for the ADS neutral palette (`#172B4D`
+  text, `#6B778C` subtle, `#DFE1E6` borders, `#FAFBFC` sunken inputs, `#F4F5F7`
+  page), the brand blue `#0052CC`, and danger/success colours. Components
+  reference the tokens, so the look is consistent and a change is one edit.
+- Single light theme: white cards on a lightly tinted page, ADS elevation shadows
+  for depth. There is no dark mode.
+- Spacing on an 8px base grid; ADS-style 2px input borders that turn blue on
+  focus; a custom select caret; lozenge-style ticket keys.
+- Typography: Inter (a stand-in for Atlassian Sans), loaded via a Google Fonts
+  `<link>` in `index.html`, with the ADS type scale (14px body, bold headings).
 
 Responsive:
 
 - Layout uses CSS Grid and Flexbox with `gap`; no fixed pixel widths for
   containers. Content reflows instead of overflowing.
-- Fluid sizing with `clamp()` for font sizes and spacing, so text scales between
-  a min and max without breakpoints.
-- Container queries (`@container`) let components adapt to the space they are
-  in, not just the viewport, so the same component works in a sidebar or a wide
-  panel.
-- A couple of viewport breakpoints handle the big shifts (single column on
-  phones, multi column on desktop).
+- Fluid sizing with `clamp()` where it helps, plus a viewport breakpoint that
+  collapses the dashboard's two columns into one on narrow screens.
 
 Fast:
 
-- CSS Modules are static: styles are extracted to a plain `.css` file at build
-  time, no runtime style engine and no style recalculation cost, unlike CSS-in-JS.
-- Critical CSS ships with the bundle; there is no flash of unstyled content.
-- No UI framework dependency to download; the token file plus component modules
-  keep the CSS small.
+- The stylesheet is static CSS extracted into the Vite build, no runtime style
+  engine and no style recalculation cost, unlike CSS-in-JS.
+- No UI framework dependency to download; one small token-driven stylesheet keeps
+  the CSS small.
 
 ## Loading and slow requests
 
@@ -263,20 +279,25 @@ Real-time UI validation:
 Every error is classified so the message says what happened, whose fault it is,
 and what to do next. The UI never shows a raw status code or JSON.
 
-| Case                                   | Class          | Message and behavior                                                                                                                       |
-| -------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Field invalid (length, required)       | Your input     | Inline, per field, live. Submit stays disabled.                                                                                            |
-| Missing project-required field         | Your input     | Name the field: "Severity is required for this project."                                                                                   |
-| Session expired (401)                  | Auto-recovered | No error shown. Silent redirect to re-login (see API calls).                                                                               |
-| No permission / project gone (403/404) | Rare race      | Should not happen (picker only lists creatable projects). If it does: "That project is no longer available", and refresh the project list. |
-| Jira rate limited (429)                | System, auto   | No error shown. Backend retries; UI shows the slow-request loading.                                                                        |
-| Jira or network failed (502)           | System, retry  | "We couldn't reach Jira. Your finding was not created, please try again." Form stays filled.                                               |
-| Unexpected (500)                       | System         | "Something went wrong on our side. Please try again." with a request id for support.                                                       |
+| Case                                    | Class          | Message and behavior                                                                                                                       |
+| --------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Field invalid (length, required)        | Your input     | Inline, per field, live. Submit stays disabled.                                                                                            |
+| Missing project-required field          | Your input     | Name the field: "Severity is required for this project."                                                                                   |
+| Session expired (401)                   | Auto-recovered | No error shown. Silent redirect to re-login (see API calls).                                                                               |
+| No permission / project gone (403/404)  | Rare race      | Should not happen (picker only lists creatable projects). If it does: "That project is no longer available", and refresh the project list. |
+| Jira rejected a field value (400)       | Your input     | Jira's own reason, surfaced verbatim from the backend (e.g. "assignee: Please select a valid user"). Form stays filled.                    |
+| Jira rate limited (429)                 | System, auto   | No error shown. Backend retries; UI shows the slow-request loading.                                                                        |
+| Jira unreachable / network failed (502) | System, retry  | "We couldn't reach Jira. Please try again." Form stays filled.                                                                             |
+| Unexpected (500)                        | System         | "Something went wrong on our side. Please try again."                                                                                      |
 
 The split is deliberate: "your input" errors are fixable by the user and are
 shown inline and immediately; "system" errors are not the user's fault and offer
 a retry with their work preserved; some cases are handled automatically and show
 no error at all.
+
+The client reads the backend's `{ message }` on a failed response and shows it
+verbatim, so a specific Jira reason reaches the user instead of a generic line.
+Failures are also logged to the console; they are never silently swallowed.
 
 ## Intuitive interactions
 
@@ -295,8 +316,10 @@ no error at all.
   with `rel="noopener"`), showing title and relative time ("2 hours ago").
 - Project picker: searchable, and only lists projects the user can create in
   (from createmeta), so there are no dead options.
-- API key UX: shown exactly once with a copy button and an explicit "you will not
-  see this again" warning; revoke asks for confirmation (destructive action).
+- API key UX: creation takes a name and an "Expires in" choice (presets 1 day,
+  30 days, or 12 months, plus a Custom number of days); the raw key is shown
+  exactly once with a copy button and an explicit "you will not see this again"
+  warning; revoke asks for confirmation (destructive action).
 - Show context: the header shows which Jira site or workspace the user is
   connected to and who they are logged in as. Because the app is multi-tenant,
   the user must never be unsure whose Jira they are filing into.
