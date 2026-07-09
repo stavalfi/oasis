@@ -21,6 +21,8 @@ export const resourcesSchema = z.array(
 export const identitySchema = z.object({ account_id: z.string(), email: z.string() });
 
 export const projectsSchema = z.object({
+  // Page marker from Jira's paginated project search; true on the final page.
+  isLast: z.boolean().optional(),
   values: z.array(z.object({ id: z.string(), key: z.string(), name: z.string() })).optional(),
 });
 

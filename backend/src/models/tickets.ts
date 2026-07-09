@@ -28,23 +28,35 @@ export class TicketsModel {
   }
 
   /**
-   * The most recent app-created tickets for a project, newest first, capped at
+   * A page of app-created tickets for a project, newest first, capped at
    * `limit`. Project-scoped (not per-user): every app user's tickets for the
-   * project appear, matching the "Recent Tickets for the selected project" view.
+   * project are candidates; the service then drops any the acting user cannot
+   * see in Jira. Because that visibility filter runs after this read, the caller
+   * pages with `olderThan` (keyset on `created_at`, `id`) until it has collected
+   * enough visible rows, instead of a single DB `LIMIT` that would be truncated
+   * by the filter.
+   *
+   * @param olderThan - keyset cursor; returns only rows strictly older than it.
    */
-  public static listRecent({
+  public static listRecentCandidates({
     projectKey,
     limit,
+    olderThan,
   }: {
     projectKey: string;
     limit: number;
+    olderThan: { createdAt: Date; id: string } | undefined;
   }): Promise<TicketRow[]> {
-    return db
-      .selectFrom("tickets")
-      .selectAll()
-      .where("project_key", "=", projectKey)
-      .orderBy("created_at", "desc")
-      .limit(limit)
-      .execute();
+    let query = db.selectFrom("tickets").selectAll().where("project_key", "=", projectKey);
+    if (olderThan !== undefined) {
+      const cursor = olderThan;
+      query = query.where((eb) =>
+        eb.or([
+          eb("created_at", "<", cursor.createdAt),
+          eb.and([eb("created_at", "=", cursor.createdAt), eb("id", "<", cursor.id)]),
+        ]),
+      );
+    }
+    return query.orderBy("created_at", "desc").orderBy("id", "desc").limit(limit).execute();
   }
 }

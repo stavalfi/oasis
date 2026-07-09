@@ -36,6 +36,12 @@ export const RecentTicketsList = (): ReactNode => {
     return <p className="muted">Select a project to see its recent findings.</p>;
   }
 
+  // Not yet in the map means the first fetch for this project is still in flight
+  // (later background refreshes keep the previous list, so no flicker).
+  if (!(selectedProjectKey in recentByProjectKey)) {
+    return <p className="muted">Loading recent tickets…</p>;
+  }
+
   const tickets = recentByProjectKey[selectedProjectKey] ?? [];
   if (tickets.length === 0) {
     return <p className="muted">No findings reported for this project yet.</p>;

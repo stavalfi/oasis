@@ -12,6 +12,7 @@ import { fetchAssignees } from "../client.ts";
 import type { Assignee } from "../client.ts";
 import { createFinding } from "../store/tickets-slice.ts";
 import { useAppDispatch, useAppSelector } from "../store/hooks.ts";
+import { FuzzySelect } from "./fuzzy-select.tsx";
 
 const TITLE_MAX_LENGTH = 255;
 const DESCRIPTION_MAX_LENGTH = 32_767;
@@ -86,6 +87,7 @@ export const CreateFindingForm = (): ReactNode => {
 
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
+  const [assigneesLoading, setAssigneesLoading] = useState(false);
 
   // Load the assignable users for the selected project (for user-type fields).
   useEffect(() => {
@@ -93,6 +95,7 @@ export const CreateFindingForm = (): ReactNode => {
       return;
     }
     setAssignees([]);
+    setAssigneesLoading(true);
     const loadAssignees = async (): Promise<void> => {
       try {
         setAssignees(await fetchAssignees(selectedProjectKey));
@@ -101,6 +104,8 @@ export const CreateFindingForm = (): ReactNode => {
         // hide the failure — surface it in the console.
         console.error("Failed to load assignable users", error);
         setAssignees([]);
+      } finally {
+        setAssigneesLoading(false);
       }
     };
     void loadAssignees();
@@ -246,45 +251,38 @@ export const CreateFindingForm = (): ReactNode => {
       </label>
 
       {project.fields.map((field) => {
+        const fieldInputId = `field-${field.fieldId}`;
+        const currentValue = draft.fieldValues[field.fieldId] ?? "";
         let control: ReactNode;
         if (isUserField(field)) {
-          // A Jira user field (assignee or a custom user picker): choose from
-          // the project's assignable users so we only ever send a valid account.
+          // A Jira user field (assignee or a custom user picker): choose from the
+          // project's assignable users so we only ever send a valid account.
           control = (
-            <select
-              className="field__input"
-              onChange={(event) =>
-                setFieldValue({ fieldId: field.fieldId, value: event.target.value })
-              }
-              value={draft.fieldValues[field.fieldId] ?? ""}
-            >
-              <option value="">— unassigned —</option>
-              {assignees.map((user) => (
-                <option key={user.accountId} value={user.accountId}>
-                  {user.displayName}
-                </option>
-              ))}
-            </select>
+            <FuzzySelect
+              inputId={fieldInputId}
+              isClearable
+              isLoading={assigneesLoading}
+              onChange={(value) => setFieldValue({ fieldId: field.fieldId, value: value ?? "" })}
+              options={assignees.map((user) => ({
+                label: user.displayName,
+                value: user.accountId,
+              }))}
+              placeholder={assigneesLoading ? "Loading users…" : "Search users…"}
+              value={currentValue}
+            />
           );
         } else if (field.allowedValues !== undefined && field.allowedValues.length > 0) {
           control = (
-            <select
-              className="field__input"
-              onChange={(event) =>
-                setFieldValue({ fieldId: field.fieldId, value: event.target.value })
-              }
-              value={draft.fieldValues[field.fieldId] ?? ""}
-            >
-              <option value="">— select —</option>
-              {field.allowedValues.map((allowed) => (
-                <option
-                  key={allowed.id ?? allowed.value ?? allowed.name}
-                  value={allowed.id ?? allowed.value ?? ""}
-                >
-                  {allowed.name ?? allowed.value ?? allowed.id}
-                </option>
-              ))}
-            </select>
+            <FuzzySelect
+              inputId={fieldInputId}
+              isClearable
+              onChange={(value) => setFieldValue({ fieldId: field.fieldId, value: value ?? "" })}
+              options={field.allowedValues.map((allowed) => ({
+                label: allowed.name ?? allowed.value ?? allowed.id ?? "",
+                value: allowed.id ?? allowed.value ?? "",
+              }))}
+              value={currentValue}
+            />
           );
         } else {
           let inputType = "text";
@@ -296,28 +294,29 @@ export const CreateFindingForm = (): ReactNode => {
           control = (
             <input
               className="field__input"
+              id={fieldInputId}
               onChange={(event) =>
                 setFieldValue({ fieldId: field.fieldId, value: event.target.value })
               }
               placeholder={field.type === "array" ? "comma, separated, values" : ""}
               type={inputType}
-              value={draft.fieldValues[field.fieldId] ?? ""}
+              value={currentValue}
             />
           );
         }
 
         return (
-          <label className="field" key={field.fieldId}>
-            <span className="field__label">
+          <div className="field" key={field.fieldId}>
+            <label className="field__label" htmlFor={fieldInputId}>
               {field.name}
               {field.required ? (
                 <em className="field__required"> *</em>
               ) : (
                 <span className="field__optional"> (optional)</span>
               )}
-            </span>
+            </label>
             {control}
-          </label>
+          </div>
         );
       })}
 

@@ -28,6 +28,10 @@ frontend only. The backend is in [docs/backend-design.md](./backend-design.md).
   runs `vite build`; the backend launcher also runs it (and a `--watch` rebuild)
   on `bun run backend`. There is no separate `bun run frontend` dev server.
 - UI: React + TypeScript.
+- Combobox: `react-select` for every searchable picker (project, assignee, enum
+  fields), with `match-sorter` for fuzzy matching, wrapped once in a shared
+  `FuzzySelect` component. Its built-in loading state gives a spinner while
+  options are still being fetched.
 - State: Redux Toolkit (slices + async thunks).
 - No Jira token ever reaches this layer. The frontend talks only to our backend
   and holds only an opaque session cookie (set by the backend, HttpOnly, so this
@@ -38,7 +42,7 @@ The frontend lives in the `frontend/` folder, alongside `backend/`.
 ```
 frontend/src/
   pages/        one component per route (LoginPage, DashboardPage, ApiKeysPage).
-  components/   shared UI (ProjectPicker, CreateFindingForm, RecentTicketsList).
+  components/   shared UI (FuzzySelect, ProjectPicker, CreateFindingForm, RecentTicketsList).
   store/        Redux store, slices, and async thunks.
   client.ts     typed Hono RPC client (hc<AppType>) and the thin call wrappers.
   styles/       theme.css, the single global stylesheet.
@@ -118,6 +122,7 @@ ticketsSlice
 apiKeysSlice
   list:            ApiKey[]        // metadata only, never the secret
   newlyCreatedKey: string | null   // shown once, then cleared
+  loading:         boolean         // true while the list is (re)fetching
   creating:        boolean
   error:           string | null
 ```
@@ -150,11 +155,11 @@ marks required, and adds a curated set of important optional fields when the
 project exposes them (priority, labels, assignee, due date, components), each
 labelled `(optional)`. Text fields render as inputs, date fields as a native date
 picker (only a valid `yyyy-MM-dd` is submitted, so a stale draft value the picker
-cannot display is never sent), enum fields as dropdowns of their `allowedValues`,
-labels as a tag input, and the assignee (user) field as a dropdown of the
-project's assignable users. That list comes from `GET
-/api/projects/:key/assignees`, fetched when the project is selected, so only a
-valid account is ever sent. Required fields must be filled; optional ones may be
+cannot display is never sent), enum fields as fuzzy-search `FuzzySelect`
+comboboxes of their `allowedValues`, labels as a tag input, and the assignee
+(user) field as a `FuzzySelect` of the project's assignable users (with a loading
+spinner while they fetch). That list comes from `GET /api/projects/:key/assignees`,
+fetched when the project is selected, so only a valid account is ever sent. Required fields must be filled; optional ones may be
 left blank.
 
 ### Draft persistence
@@ -200,8 +205,11 @@ A 401 from any call resets `authSlice` to `loggedOut` and redirects to
 ## Styling
 
 A single global stylesheet, `frontend/src/styles/theme.css`, linked from
-`index.html`. No CSS Modules and no CSS-in-JS: this is a Jira tool, so the theme
-is built on the Atlassian Design System (ADS) language to feel native to Jira.
+`index.html`. Our own styling uses no CSS Modules and no CSS-in-JS: this is a Jira
+tool, so the theme is built on the Atlassian Design System (ADS) language to feel
+native to Jira. (The one exception is `react-select`, which ships its own
+emotion-based styles for the comboboxes; it is scoped to those controls and left
+largely at its defaults.)
 
 - Design tokens: `:root` custom properties for the ADS neutral palette (`#172B4D`
   text, `#6B778C` subtle, `#DFE1E6` borders, `#FAFBFC` sunken inputs, `#F4F5F7`
@@ -243,8 +251,10 @@ rather than alarming.
   longer than a couple of seconds (backend is retrying), the button label
   softens to "Still creating..." instead of failing. No scary message appears
   while the request is pending.
-- Data fetches (projects, recent tickets) show skeleton placeholders, not
-  spinners on blank screens, so layout does not jump when data arrives.
+- Every backend fetch shows an explicit loading indicator: the project and
+  assignee comboboxes show react-select's built-in spinner while their options
+  load, and the recent-tickets and API-key lists show a "Loading…" line on their
+  first fetch (a background refresh keeps the previous list, so it never flickers).
 - Only if the backend finally gives up (retries exhausted) does a calm,
   actionable message appear ("Jira is busy, please try again"), with the form
   still filled for a one-click retry.
@@ -314,8 +324,10 @@ Failures are also logged to the console; they are never silently swallowed.
   cannot create duplicate tickets.
 - Recent tickets: clickable, open the Jira issue in a new tab (`target="_blank"`
   with `rel="noopener"`), showing title and relative time ("2 hours ago").
-- Project picker: searchable, and only lists projects the user can create in
-  (from createmeta), so there are no dead options.
+- Project picker: a `FuzzySelect` combobox over every project the user can create
+  in (the backend pages through the whole workspace, so the list is complete and
+  has no dead options). Typing fuzzy-matches project names or keys, and a spinner
+  shows while the list is still loading.
 - API key UX: creation takes a name and an "Expires in" choice (presets 1 day,
   30 days, or 12 months, plus a Custom number of days); the raw key is shown
   exactly once with a copy button and an explicit "you will not see this again"

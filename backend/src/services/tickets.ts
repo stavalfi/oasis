@@ -19,6 +19,10 @@ import { TicketsModel } from "../models/tickets.ts";
 import { Cache } from "../redis/cache.ts";
 import { InvalidFindingError, ProjectNotFoundError } from "./errors/index.ts";
 import { JiraAccess } from "./jira-access.ts";
+import type { FreshConnection } from "./jira-access.ts";
+
+/** A tickets row, derived from the model so this file needs no extra import. */
+type TicketRow = Awaited<ReturnType<typeof TicketsModel.listRecentCandidates>>[number];
 
 export class TicketsService {
   /** Whether a provided field value counts as present (non-empty). */
@@ -200,7 +204,45 @@ export class TicketsService {
     });
   }
 
-  /** Load recent app-created tickets for a project with live titles (uncached). */
+  /**
+   * Resolve one ticket row to its live view, or undefined if the acting user
+   * cannot see the issue (deleted, or not visible from this connection), so it
+   * is dropped from the list rather than shown as a dead link.
+   */
+  static async #resolveTicket({
+    connection,
+    row,
+  }: {
+    connection: FreshConnection;
+    row: TicketRow;
+  }): Promise<Ticket | undefined> {
+    const details = await jiraClient.getIssueDetails({
+      accessToken: connection.accessToken,
+      cloudId: connection.cloudId,
+      issueKey: row.jira_issue_key,
+    });
+    if (details === undefined) {
+      return undefined;
+    }
+    return {
+      createdAt: row.created_at.toISOString(),
+      key: row.jira_issue_key,
+      reporter: details.reporter ?? "Unknown",
+      title: details.title ?? row.jira_issue_key,
+      url: `${connection.siteUrl}/browse/${row.jira_issue_key}`,
+      ...(details.priority === undefined ? {} : { priority: details.priority }),
+      ...(details.status === undefined ? {} : { status: details.status }),
+    };
+  }
+
+  /**
+   * Load recent app-created tickets for a project with live titles (uncached).
+   * Project-scoped, but each candidate is filtered through the acting user's own
+   * Jira token, so the list only contains issues that user can actually open.
+   * Pages candidates newest-first and keeps pulling until it has
+   * `recentTicketsLimit` visible rows (or runs out / hits the scan cap), so the
+   * per-row visibility filter cannot silently shrink the list below the limit.
+   */
   static #loadRecentTickets({
     userId,
     projectKey,
@@ -210,36 +252,37 @@ export class TicketsService {
   }): Promise<Ticket[]> {
     return JiraAccess.withConnection({
       operation: async (connection) => {
-        // Project-scoped: every app-created ticket for this project, regardless of
-        // which app user created it. Titles + reporter are read live from Jira.
-        const rows = await TicketsModel.listRecent({
-          limit: config.constants.recentTicketsLimit,
-          projectKey,
-        });
-        const tickets = await Promise.all(
-          rows.map(async (row): Promise<Ticket | undefined> => {
-            const details = await jiraClient.getIssueDetails({
-              accessToken: connection.accessToken,
-              cloudId: connection.cloudId,
-              issueKey: row.jira_issue_key,
-            });
-            // Dropped if the issue no longer exists in Jira (deleted) or isn't
-            // visible from this connection, so the list never shows a dead link.
-            if (details === undefined) {
-              return undefined;
+        const target = config.constants.recentTicketsLimit;
+        const batchSize = config.constants.recentTicketsScanBatchSize;
+        const maxRows = config.constants.recentTicketsScanMaxRows;
+        const visible: Ticket[] = [];
+        let cursor: { createdAt: Date; id: string } | undefined;
+        let scanned = 0;
+        while (visible.length < target && scanned < maxRows) {
+          const rows = await TicketsModel.listRecentCandidates({
+            limit: batchSize,
+            olderThan: cursor,
+            projectKey,
+          });
+          if (rows.length === 0) {
+            break;
+          }
+          scanned += rows.length;
+          const resolved = await Promise.all(
+            rows.map((row) => TicketsService.#resolveTicket({ connection, row })),
+          );
+          for (const ticket of resolved) {
+            if (ticket !== undefined) {
+              visible.push(ticket);
             }
-            return {
-              createdAt: row.created_at.toISOString(),
-              key: row.jira_issue_key,
-              reporter: details.reporter ?? "Unknown",
-              title: details.title ?? row.jira_issue_key,
-              url: `${connection.siteUrl}/browse/${row.jira_issue_key}`,
-              ...(details.priority === undefined ? {} : { priority: details.priority }),
-              ...(details.status === undefined ? {} : { status: details.status }),
-            };
-          }),
-        );
-        return tickets.filter((ticket): ticket is Ticket => ticket !== undefined);
+          }
+          const lastRow = rows.at(-1);
+          if (rows.length < batchSize || lastRow === undefined) {
+            break;
+          }
+          cursor = { createdAt: lastRow.created_at, id: lastRow.id };
+        }
+        return visible.slice(0, target);
       },
       userId,
     });

@@ -1,14 +1,17 @@
 /**
  * project-picker.tsx
  *
- * A searchable-by-typing dropdown of the projects the user can create issues in
- * (so there are no dead options). Selecting one loads its recent tickets.
+ * A fuzzy-search combobox over every project the user can create issues in (the
+ * backend pages through the whole workspace, so the list is complete). Typing
+ * matches project names or keys fuzzily; a spinner shows while the list loads.
+ * Selecting a project loads its recent tickets.
  */
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { useAppDispatch, useAppSelector } from "../store/hooks.ts";
 import { selectProject } from "../store/projects-slice.ts";
 import { loadRecentTickets } from "../store/tickets-slice.ts";
+import { FuzzySelect } from "./fuzzy-select.tsx";
 
 export const ProjectPicker = (): ReactNode => {
   const dispatch = useAppDispatch();
@@ -20,32 +23,27 @@ export const ProjectPicker = (): ReactNode => {
     }
   }, [dispatch, selectedProjectKey]);
 
-  if (loading) {
-    return <p className="muted">Loading projects…</p>;
-  }
-  if (error !== undefined) {
-    return <p className="banner banner--error">{error}</p>;
-  }
-  if (list.length === 0) {
-    return <p className="muted">You have no projects you can create issues in.</p>;
-  }
-
   return (
-    <label className="field">
-      <span className="field__label">
+    <div className="field">
+      <label className="field__label" htmlFor="project-picker">
         Project<em className="field__required"> *</em>
-      </span>
-      <select
-        className="field__input"
-        onChange={(event) => dispatch(selectProject(event.target.value))}
-        value={selectedProjectKey ?? ""}
-      >
-        {list.map((project) => (
-          <option key={project.key} value={project.key}>
-            {project.name} ({project.key})
-          </option>
-        ))}
-      </select>
-    </label>
+      </label>
+      <FuzzySelect
+        inputId="project-picker"
+        isLoading={loading}
+        onChange={(projectKey) => {
+          if (projectKey !== undefined) {
+            dispatch(selectProject(projectKey));
+          }
+        }}
+        options={list.map((project) => ({
+          label: `${project.name} (${project.key})`,
+          value: project.key,
+        }))}
+        placeholder={loading ? "Loading projects…" : "Select or search a project…"}
+        value={selectedProjectKey}
+      />
+      {error !== undefined && <p className="banner banner--error">{error}</p>}
+    </div>
   );
 };

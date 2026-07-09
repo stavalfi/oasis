@@ -15,6 +15,7 @@ import { config } from "../config.ts";
 import { Retry } from "../lib/retry.ts";
 import { Cache } from "../redis/cache.ts";
 import { JiraAccess } from "./jira-access.ts";
+import type { FreshConnection } from "./jira-access.ts";
 
 export class ProjectsService {
   /** Whether a createmeta field should appear in the dynamic form. */
@@ -41,6 +42,48 @@ export class ProjectsService {
   }
 
   /**
+   * Build one project's create form metadata (issue type plus the fields to
+   * render). Returns undefined if the project exposes no creatable issue type,
+   * so the caller can skip it (list) or turn it into a 404 (single lookup).
+   */
+  static async #buildProject({
+    connection,
+    projectKey,
+    projectName,
+  }: {
+    connection: FreshConnection;
+    projectKey: string;
+    projectName: string;
+  }): Promise<Project | undefined> {
+    const issueTypes = await jiraClient.getIssueTypes({
+      accessToken: connection.accessToken,
+      cloudId: connection.cloudId,
+      projectKey,
+    });
+    const issueType =
+      issueTypes.find((type) => type.name === config.constants.preferredIssueTypeName) ??
+      issueTypes[0];
+    if (issueType === undefined) {
+      return undefined;
+    }
+    const fields = await jiraClient.getIssueTypeFields({
+      accessToken: connection.accessToken,
+      cloudId: connection.cloudId,
+      issueTypeId: issueType.id,
+      projectKey,
+    });
+    return {
+      fields: fields
+        .filter((field) => ProjectsService.#shouldRenderField(field))
+        .map((field) => ProjectsService.#toFieldMeta(field)),
+      issueTypeId: issueType.id,
+      issueTypeName: issueType.name,
+      key: projectKey,
+      name: projectName,
+    };
+  }
+
+  /**
    * Load creatable projects with their issue type and dynamic fields (uncached).
    * A project with no creatable issue type is skipped.
    */
@@ -51,38 +94,15 @@ export class ProjectsService {
           accessToken: connection.accessToken,
           cloudId: connection.cloudId,
         });
-
         const builtProjects = await Promise.all(
-          projects.map(async (project): Promise<Project | undefined> => {
-            const issueTypes = await jiraClient.getIssueTypes({
-              accessToken: connection.accessToken,
-              cloudId: connection.cloudId,
+          projects.map((project) =>
+            ProjectsService.#buildProject({
+              connection,
               projectKey: project.key,
-            });
-            const issueType =
-              issueTypes.find((type) => type.name === config.constants.preferredIssueTypeName) ??
-              issueTypes[0];
-            if (issueType === undefined) {
-              return undefined;
-            }
-            const fields = await jiraClient.getIssueTypeFields({
-              accessToken: connection.accessToken,
-              cloudId: connection.cloudId,
-              issueTypeId: issueType.id,
-              projectKey: project.key,
-            });
-            return {
-              fields: fields
-                .filter((field) => ProjectsService.#shouldRenderField(field))
-                .map((field) => ProjectsService.#toFieldMeta(field)),
-              issueTypeId: issueType.id,
-              issueTypeName: issueType.name,
-              key: project.key,
-              name: project.name,
-            };
-          }),
+              projectName: project.name,
+            }),
+          ),
         );
-
         return builtProjects.filter((project): project is Project => project !== undefined);
       },
       userId,

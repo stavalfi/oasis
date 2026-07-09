@@ -78,7 +78,10 @@ export const config = deepFreeze({
       issueDetailFields: ["summary", "reporter", "priority", "status"],
       // Retry budget: 4 retries (5 attempts total).
       maxRetries: 4,
-      // Cap for a single page of creatable projects (POC: one page is enough).
+      // Safety bound on how many pages the project search will walk (100 * 50 =
+      // up to 5000 projects), so a huge workspace can't loop unboundedly.
+      projectsMaxPages: 50,
+      // Page size for the creatable-projects search (Jira caps this at 100).
       projectsPageSize: 100,
       // OAuth token exchange / refresh endpoint.
       tokenUrl: "https://auth.atlassian.com/oauth/token",
@@ -98,6 +101,13 @@ export const config = deepFreeze({
     // A finding maps to a Task; fall back to the project's first issue type.
     preferredIssueTypeName: "Task",
     recentTicketsLimit: 10,
+    // Recent Tickets is project-wide but each row is filtered through the acting
+    // user's own Jira token (an issue they cannot see is dropped). Because that
+    // filter runs after the DB read, we page candidates in batches and keep
+    // pulling until we have `recentTicketsLimit` visible rows or run out. The max
+    // bounds how many rows (and Jira calls) a single request will scan.
+    recentTicketsScanBatchSize: 20,
+    recentTicketsScanMaxRows: 200,
     // Per-user distributed lock (redlock) guarding token refresh, so concurrent
     // requests (including across pods) don't each spend the same rotating
     // refresh token. Values map to redlock's Settings.

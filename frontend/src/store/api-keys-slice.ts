@@ -12,6 +12,7 @@ import type { ApiKeyMetadata } from "../client.ts";
 export interface ApiKeysState {
   list: ApiKeyMetadata[];
   newlyCreatedKey: string | undefined;
+  loading: boolean;
   creating: boolean;
   error: string | undefined;
 }
@@ -20,6 +21,7 @@ const initialState: ApiKeysState = {
   creating: false,
   error: undefined,
   list: [],
+  loading: false,
   newlyCreatedKey: undefined,
 };
 
@@ -46,8 +48,16 @@ export const revokeApiKey = createAsyncThunk("apiKeys/revokeApiKey", async (id: 
 const apiKeysSlice = createSlice({
   extraReducers: (builder) => {
     builder
+      .addCase(loadApiKeys.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(loadApiKeys.fulfilled, (state, action) => {
+        state.loading = false;
         state.list = action.payload;
+      })
+      .addCase(loadApiKeys.rejected, (state) => {
+        state.loading = false;
+        state.error = "We couldn't load your API keys. Please try again.";
       })
       .addCase(createApiKey.pending, (state) => {
         state.creating = true;

@@ -12,7 +12,11 @@ import { formatDate } from "../util/dates.ts";
 export const ApiKeyList = (): ReactNode => {
   const dispatch = useAppDispatch();
   const keys = useAppSelector((state) => state.apiKeys.list);
+  const loading = useAppSelector((state) => state.apiKeys.loading);
 
+  if (loading && keys.length === 0) {
+    return <p className="muted">Loading API keys…</p>;
+  }
   if (keys.length === 0) {
     return <p className="muted">No API keys yet. Create one above.</p>;
   }

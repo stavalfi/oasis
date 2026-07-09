@@ -98,6 +98,8 @@
     "@reduxjs/toolkit",
     "react-redux",
     "react-router-dom",
+    "react-select",
+    "match-sorter",
     "@types/react",
     "@types/react-dom",
   ],

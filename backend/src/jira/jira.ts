@@ -259,7 +259,11 @@ export class JiraClient {
       .map((user) => ({ accountId: user.accountId, displayName: user.displayName }));
   }
 
-  /** List projects the acting user can create issues in. */
+  /**
+   * List every project the acting user can create issues in, paging through
+   * Jira's paginated project search until the last page (or the page-count
+   * safety bound), so the caller gets the whole workspace rather than one page.
+   */
   public async searchCreatableProjects({
     cloudId,
     accessToken,
@@ -267,24 +271,36 @@ export class JiraClient {
     cloudId: string;
     accessToken: string;
   }): Promise<JiraProjectSummary[]> {
-    const { data, response } = await searchProjects({
-      baseUrl: JiraClient.#jiraApiBase(cloudId),
-      client: this.#jiraClient,
-      headers: { Authorization: `Bearer ${accessToken}` },
-      query: { action: "create", maxResults: config.constants.jira.projectsPageSize },
-    });
-    if (data === undefined) {
-      throw new JiraApiError({
-        message: "Failed to search projects.",
-        operation: "projects",
-        status: response?.status ?? 0,
+    const pageSize = config.constants.jira.projectsPageSize;
+    const allProjects: JiraProjectSummary[] = [];
+    let startAt = 0;
+    for (let page = 0; page < config.constants.jira.projectsMaxPages; page++) {
+      const { data, response } = await searchProjects({
+        baseUrl: JiraClient.#jiraApiBase(cloudId),
+        client: this.#jiraClient,
+        headers: { Authorization: `Bearer ${accessToken}` },
+        query: { action: "create", maxResults: pageSize, startAt },
       });
+      if (data === undefined) {
+        throw new JiraApiError({
+          message: "Failed to search projects.",
+          operation: "projects",
+          status: response?.status ?? 0,
+        });
+      }
+      const parsed = projectsSchema.parse(data);
+      const values = parsed.values ?? [];
+      for (const project of values) {
+        allProjects.push({ id: project.id, key: project.key, name: project.name });
+      }
+      // Stop on the last page: Jira's `isLast`, or a short page (fewer than a
+      // full page returned means there is nothing after it).
+      if (parsed.isLast === true || values.length < pageSize) {
+        break;
+      }
+      startAt += values.length;
     }
-    return (projectsSchema.parse(data).values ?? []).map((project) => ({
-      id: project.id,
-      key: project.key,
-      name: project.name,
-    }));
+    return allProjects;
   }
 
   /** List issue types available for creation in a project. */
@@ -406,9 +422,10 @@ export class JiraClient {
 
   /**
    * Read an issue's current title and reporter (for the live Recent Tickets
-   * row). Returns `undefined` if the issue no longer exists in Jira (404, i.e.
-   * it was deleted), so the caller can drop the stale reference. Other failures
-   * throw.
+   * row). Returns `undefined` if the acting user cannot see the issue: 404 (it
+   * was deleted, or Jira hides its existence) or 403 (issue-level security
+   * denies access), so the caller drops the reference rather than showing a row
+   * the user can't open. Other failures throw.
    */
   public async getIssueDetails({
     cloudId,
@@ -435,7 +452,7 @@ export class JiraClient {
       query: { fields: [...config.constants.jira.issueDetailFields] },
     });
     if (data === undefined) {
-      if (response?.status === 404) {
+      if (response?.status === 404 || response?.status === 403) {
         return undefined;
       }
       throw new JiraApiError({

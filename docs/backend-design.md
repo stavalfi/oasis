@@ -33,6 +33,7 @@ This document covers the backend only. The UI is in
   - [5. Fifth login (refresh token expired)](#5-fifth-login-refresh-token-expired-about-90-days)
   - [6. Machine caller (REST API)](#6-machine-caller-rest-api-no-session)
   - [Logout](#logout)
+- [Bonus: NHI Blog Digest automation](#bonus-nhi-blog-digest-automation)
 - [Scope decisions](#scope-decisions)
 - [Assumptions and decisions](#assumptions-and-decisions)
 
@@ -79,6 +80,10 @@ backend/src/
   jira/         Atlassian client. A single `jira.ts` class is the ONLY code that
                 calls Atlassian (token exchange, accessible-resources, identity,
                 createmeta, issue create/read). Nothing else talks to Jira.
+  blog/         Oasis blog client (bonus). A single class is the ONLY code that
+                fetches oasis.security/blog. See NHI Blog Digest automation.
+  ai/           AI client (bonus). A single class is the ONLY code that calls the
+                AIonLabs API. See NHI Blog Digest automation.
   db/
     migrations/ Kysely migration files.
     schema.ts   typed database schema for Kysely.
@@ -154,20 +159,40 @@ Environment-derived values (validated by the Zod schema, no defaults; required):
 | REDIS_HOST         | Redis host                               | string | required |
 | REDIS_PORT         | Redis port                               | number | required |
 
+The three variables below are only needed by the bonus NHI Blog Digest script,
+not the web server. They are declared `optional` in the shared Zod schema so the
+server starts without them; the digest script validates their presence at its own
+startup and fails fast if any is missing.
+
+| Name                    | Description                                           | Type   | Default  |
+| ----------------------- | ----------------------------------------------------- | ------ | -------- |
+| AIONLABS_API_KEY        | AIonLabs API key (secret; redacted in logs)           | string | optional |
+| BLOG_DIGEST_API_KEY     | IdentityHub API key selecting the tenant to file into | string | optional |
+| BLOG_DIGEST_PROJECT_KEY | Target Jira project key for digest tickets            | string | optional |
+
 Constant values (hard-coded in `config.ts`, not from the environment):
 
-| Name                                      | Description                             | Type          | Default     |
-| ----------------------------------------- | --------------------------------------- | ------------- | ----------- |
-| constants.recentTicketsLimit              | Max tickets in the Recent Tickets view  | number        | 10          |
-| constants.cache.meAndProjectsTtlSeconds   | Cache TTL for /api/me and /api/projects | number (s)    | 300         |
-| constants.cache.recentTicketsTtlSeconds   | Cache TTL for recent tickets            | number (s)    | 10          |
-| constants.cache.assignableUsersTtlSeconds | Cache TTL for a project's assignees     | number (s)    | 60          |
-| constants.sessionTtlSeconds               | Session lifetime                        | number (s)    | 43200 (12h) |
-| constants.apiKeyMaxExpiryDays             | Upper bound on a requested key lifetime | number (days) | 3650        |
-| constants.validation.titleMaxLength       | Max title (Jira summary) length         | number        | 255         |
-| constants.validation.descriptionMaxLength | Max description length                  | number        | 32767       |
-| postgres.poolMin                          | Postgres pool min connections           | number        | 10          |
-| postgres.poolMax                          | Postgres pool max connections           | number        | 10          |
+| Name                                      | Description                             | Type          | Default                         |
+| ----------------------------------------- | --------------------------------------- | ------------- | ------------------------------- |
+| constants.recentTicketsLimit              | Max tickets in the Recent Tickets view  | number        | 10                              |
+| constants.cache.meAndProjectsTtlSeconds   | Cache TTL for /api/me and /api/projects | number (s)    | 300                             |
+| constants.cache.recentTicketsTtlSeconds   | Cache TTL for recent tickets            | number (s)    | 10                              |
+| constants.cache.assignableUsersTtlSeconds | Cache TTL for a project's assignees     | number (s)    | 60                              |
+| constants.sessionTtlSeconds               | Session lifetime                        | number (s)    | 43200 (12h)                     |
+| constants.apiKeyMaxExpiryDays             | Upper bound on a requested key lifetime | number (days) | 3650                            |
+| constants.validation.titleMaxLength       | Max title (Jira summary) length         | number        | 255                             |
+| constants.validation.descriptionMaxLength | Max description length                  | number        | 32767                           |
+| postgres.poolMin                          | Postgres pool min connections           | number        | 10                              |
+| postgres.poolMax                          | Postgres pool max connections           | number        | 10                              |
+| constants.blogDigest.listUrl              | Oasis blog listing URL                  | string        | https://www.oasis.security/blog |
+| constants.blogDigest.titlePrefix          | Prefix on the digest ticket summary     | string        | "NHI Blog Digest: "             |
+| constants.blogDigest.summaryInputMaxChars | Post text sent to the AI (input budget) | number        | 12000                           |
+| constants.ai.baseUrl                      | AIonLabs API base URL                   | string        | https://api.aionlabs.ai/v1      |
+| constants.ai.model                        | AIonLabs model id                       | string        | aion-labs/aion-2.0              |
+| constants.ai.maxTokens                    | Max completion tokens for the summary   | number        | 500                             |
+| constants.ai.temperature                  | Sampling temperature (factual summary)  | number        | 0.2                             |
+| constants.ai.requestTimeoutMs             | Per-request timeout for the AI call     | number (ms)   | 30000                           |
+| constants.ai.maxRetries                   | AI transport retries (ky, 429 only)     | number        | 4                               |
 
 Comment conventions:
 
@@ -186,8 +211,10 @@ One user equals one tenant equals one connected Jira site.
 - "Tenant" and "user" mean the same thing in this document. The word tenant is
   used when emphasizing isolation.
 - Two different users may connect the same Jira site. They are still separate
-  tenants: each has their own tokens, their own sessions, and sees only their
-  own app-created tickets.
+  tenants: each has their own tokens and their own sessions. Recent Tickets is
+  the one shared view: it lists app-created tickets for the selected project
+  regardless of author, but each row is filtered through the acting user's own
+  Jira token, so a user only ever sees issues they can actually open in Jira.
 
 ## Two authentication paths
 
@@ -224,9 +251,13 @@ Authorization (are they allowed this object):
   IDOR, where a user names another tenant's id in the URL.
 - On an ownership miss we return 404, not 403, so we do not reveal that an object
   with that id exists for another tenant.
-- Enforced at the `models` choke point: every model function takes the acting
-  `user_id` and includes it in the query, so authorization cannot be forgotten in
-  a handler.
+- Enforced at the `models` choke point: every model function that returns
+  tenant-owned rows takes the acting `user_id` and includes it in the query, so
+  authorization cannot be forgotten in a handler. The one exception is the Recent
+  Tickets read, which is project-scoped by design (a shared per-project view);
+  there, authorization is enforced instead by resolving each issue live through
+  the acting user's Jira token, so an issue the user cannot see in Jira is
+  dropped from the list. Jira remains the source of truth for issue visibility.
 
 ## Backend for Frontend (BFF) rule
 
@@ -685,6 +716,9 @@ sessions(session_id, user_id, expires_at)
 api_keys(id, user_id, name, key_hash, created_at, last_used_at, expires_at)
 
 tickets(id, user_id, project_key, jira_issue_key, created_at)
+
+blog_digests(id, post_url UNIQUE, jira_issue_key, user_id, created_at)
+  -- bonus: dedup ledger for the NHI Blog Digest automation
 ```
 
 Notes:
@@ -694,10 +728,19 @@ Notes:
 - `tickets` stores only a reference to each issue we created (`jira_issue_key`
   plus the immutable `created_at`), never the issue content. Content like the
   title can be edited in the Jira UI, so Recent Tickets fetches the current title
-  live from Jira by key. Our table decides which issues and their order; Jira
-  provides the up-to-date display. It is scoped by `user_id`, so a user sees only
-  tickets they created through the app. Tickets created directly in Jira are not
-  shown.
+  live from Jira by key. Our table decides which issues are candidates and their
+  order; Jira provides the up-to-date display. The row still carries `user_id`
+  (who created it), but the Recent Tickets read is project-scoped: it lists every
+  app-created ticket for the selected project, then filters each through the
+  acting user's Jira token so only issues that user can open are returned.
+  Tickets created directly in Jira (not through the app) are not shown. Because
+  the visibility filter runs after the database read, the read pages candidates
+  newest-first and keeps pulling until it has 10 visible rows (or runs out),
+  rather than a single `LIMIT 10` the filter could shrink below 10.
+- `blog_digests` is the bonus automation's dedup ledger. `post_url` is unique, so
+  a post is filed at most once even if two runs overlap. `user_id` records which
+  tenant it was filed for (the one behind `BLOG_DIGEST_API_KEY`). See the NHI Blog
+  Digest section.
 
 ---
 
@@ -885,6 +928,152 @@ variables. `config.ts` is the only code that reads them.
 The OAuth app must be registered in the Atlassian Developer Console with the
 callback URL above and the scopes listed in Assumptions.
 
+The bonus NHI Blog Digest automation adds three optional variables
+(`AIONLABS_API_KEY`, `BLOG_DIGEST_API_KEY`, `BLOG_DIGEST_PROJECT_KEY`); the web
+server ignores them and the digest script (`bun run blog-digest`) requires them.
+See the NHI Blog Digest section.
+
+---
+
+## Bonus: NHI Blog Digest automation
+
+An optional, headless automation (no UI, per the brief). On a schedule it fetches
+the newest post from the Oasis Security blog, generates an AI summary, and files
+it as a Jira ticket in a configured project. It reuses the existing machine path
+end to end: it authenticates with an API key and creates the ticket through the
+same `TicketsService.createFinding` that `POST /api/v1/findings` uses, so it
+inherits tenant isolation, credential handling, token refresh, retry, and the
+`identityhub-finding` labeling with no new privileged code path.
+
+### What it does
+
+1. Fetch the most recent post from `https://www.oasis.security/blog` (title,
+   canonical URL, readable body text).
+2. Skip if we already filed a ticket for that post (dedup on the post URL).
+3. Summarize the post body with the AIonLabs API (OpenAI-compatible chat
+   completions).
+4. Create a Jira Task in the configured project: summary is the post title
+   (prefixed), description is the AI summary plus a link back to the post.
+5. Record the post URL and the created issue key so the next run does not
+   duplicate it.
+
+### Placement (same layering)
+
+New single-choke-point clients mirror `jira/`. Dependency direction is unchanged:
+`scripts -> service -> {blog, ai, jira, models}`.
+
+```
+backend/src/
+  blog/     Oasis blog client. The ONLY code that fetches oasis.security/blog.
+            One OasisBlogClient class: GET the listing (ky), parse the newest
+            post card, GET the post page, extract title + readable body.
+  ai/       AI client. The ONLY code that calls the AIonLabs API. One
+            AiSummaryClient class: POST /v1/chat/completions (ky), returns the
+            summary text.
+  services/blog-digest.ts   BlogDigestService: orchestrates fetch -> dedup ->
+                            summarize -> createFinding -> record.
+  models/blog-digests.ts    BlogDigestsModel: the ONLY code that reads/writes
+                            blog_digests (the dedup ledger).
+  scripts/blog-digest.ts    Entry point: runs one digest cycle, then exits.
+```
+
+The blog and AI clients are the sole callers of their external hosts, exactly
+like `JiraClient` is for Atlassian. Direct `fetch` stays banned repo-wide; both
+use `ky` (jittered backoff, 429 retry honoring `Retry-After`). Parsing the blog
+listing/post HTML uses `node-html-parser` (small, no jsdom), isolated inside
+`OasisBlogClient`.
+
+### Authentication and tenant selection
+
+The automation is a machine caller, so it authenticates the same way a scanner
+does: with an API key. `BLOG_DIGEST_API_KEY` is a key a human created in the UI;
+`BLOG_DIGEST_PROJECT_KEY` is the target project. The script resolves the key to a
+user with the existing `ApiKeysService.authenticate` (which already rejects a
+missing, revoked, or expired key), then calls
+`TicketsService.createFinding({ userId, input })`. Consequences:
+
+- No new privileged path: the digest cannot touch Jira except as an authenticated
+  tenant, through the same code the public REST endpoint uses.
+- Same isolation and credential handling: tokens are read, decrypted, and
+  refreshed by `JiraAccess` under the per-user lock, exactly as for any create.
+- Revocable and rotatable: revoke the key and the automation stops; the Jira
+  connection is untouched.
+- If the tenant's refresh token has lapsed (~90 days idle), the create surfaces
+  the same reconnect 401; the script logs it and exits non-zero so the schedule
+  surfaces the failure (a human must log in to re-mint the refresh token, exactly
+  as for any machine caller).
+
+### Idempotency (no duplicate tickets)
+
+A durable ledger, not a cache, so it survives a Redis flush:
+`blog_digests(id, post_url UNIQUE, jira_issue_key, user_id, created_at)`.
+
+Each run reads the newest post URL; if a row exists, it does nothing and exits 0.
+Otherwise it summarizes, creates the ticket, then inserts the row (`post_url`
+unique). Ordering is create-then-record so a crash before the insert re-drives
+next run (at worst a rare duplicate, acceptable for a low-frequency single job)
+rather than silently skipping a post. The unique constraint is the backstop
+against two overlapping runs. The dedup key is the post URL, stable per Webflow
+post slug.
+
+### AI summarization
+
+`AiSummaryClient` calls AIonLabs (`https://api.aionlabs.ai/v1/chat/completions`,
+`Authorization: Bearer <key>`, OpenAI-compatible). A system prompt asks for a
+short, factual summary of an NHI/security blog post; the user message carries the
+extracted post text, truncated to `blogDigest.summaryInputMaxChars` so we stay
+well under the model context and the free-tier limits. The returned summary is
+trimmed to `validation.descriptionMaxLength` before it reaches Jira. The model id
+is config (`aion-labs/aion-2.0` default; `GET /v1/models` confirms the current
+catalog and needs no auth). A 429/5xx is retried by `ky`; if summarization
+ultimately fails, the script logs and exits non-zero without creating a ticket
+(never file an empty or half-formed finding).
+
+The AIonLabs free tier is tightly rate limited, so the job runs infrequently
+(daily) and makes at most one completion call per new post, and none when the
+newest post is unchanged (dedup short-circuits before the AI call).
+
+### Scheduling and running
+
+A standalone script, decoupled from the web server:
+
+- `bun run blog-digest` runs `node --env-file .env backend/scripts/blog-digest.ts`:
+  one cycle, then exit. Idempotent, so re-running is safe.
+- Any scheduler triggers it: a cron entry (documented in setup), a systemd timer,
+  or a CI schedule. We do not run an always-on in-process timer, so the web
+  server's lifecycle and the automation's are independent, and the job is
+  trivially testable and manually runnable.
+- The exit code communicates outcome to the scheduler: 0 on success or "nothing
+  new", non-zero on failure (blog fetch, AI, or Jira create), so a cron
+  wrapper/alert can catch a broken run.
+
+### Error handling
+
+| Stage            | Failure                                                        | Behavior                                                                  |
+| ---------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Blog fetch/parse | listing or post unreachable, or layout changed (no post found) | log, exit non-zero, no ticket                                             |
+| Dedup            | newest post already filed                                      | log "nothing new", exit 0                                                 |
+| AI summarize     | 429/5xx after ky retries, or empty output                      | log, exit non-zero, no ticket                                             |
+| Jira create      | reconnect 401 / 400 / 502 (reuses `createFinding`)             | log the mapped reason, exit non-zero; ledger unwritten (retries next run) |
+
+### Scope and assumptions (bonus)
+
+- No UI, per the brief. It is a headless script.
+- Tenant and project are configured via an existing API key plus a project key,
+  so the automation reuses the machine path rather than inventing a new
+  privileged flow.
+- The Oasis blog exposes no public RSS/Atom feed at the common paths
+  (`/blog/rss.xml`, `/blog/feed` both return 404), so we parse the
+  server-rendered listing HTML (Webflow) for the newest post. This is the one
+  fragile external contract; it is isolated in `OasisBlogClient` and covered by a
+  parser test against a saved HTML fixture, so a layout change fails loudly in one
+  place instead of silently filing garbage.
+- One post per run: only the single most recent post is considered. Backfilling
+  history is out of scope.
+- The digest ticket is a normal app-created ticket: it is recorded in `tickets`
+  and appears in Recent Tickets for its project, labeled `identityhub-finding`,
+  consistent with every other create.
+
 ---
 
 ## Scope decisions
@@ -892,16 +1081,16 @@ callback URL above and the scopes listed in Assumptions.
 The assignment lets us choose which Jira projects and fields to support. What we
 chose and why.
 
-| Area                        | Decision                                                                                                                                                                                                                                                          | Reason                                                                                                                                                                     |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Projects                    | Only projects the user can create issues in, from the per-project createmeta endpoints (`getCreateIssueMetaIssueTypes`, `getCreateIssueMetaIssueTypeId`)                                                                                                          | `project/search` also returns browse-only projects that would 403 on create. The bulk `createmeta` is deprecated.                                                          |
-| Issue type                  | Always `Task`, validated per project, falling back to the first issue type the project allows if `Task` is absent                                                                                                                                                 | A finding maps to a task; no value in exposing Bug or Story.                                                                                                               |
-| Base fields                 | Title to `summary` and Description to `description`, both always shown and both required                                                                                                                                                                          | Required by the assignment; minimal and intuitive.                                                                                                                         |
-| Required fields             | Every field the project marks required is rendered dynamically                                                                                                                                                                                                    | So create never fails on a project that requires extra fields.                                                                                                             |
-| Optional fields             | A curated set shown only when the project exposes them: priority, labels, assignee, due date, components                                                                                                                                                          | Useful for a real finding without supporting every field.                                                                                                                  |
-| Field rendering             | Text fields as inputs, date fields as a date picker (submitting only valid `yyyy-MM-dd`), enum fields (priority, selects) as dropdowns of their `allowedValues`, the assignee (user) field as a dropdown of the project's assignable users, labels as a tag input | Driven by createmeta `required` flag, `schema.type`, and `allowedValues`; the assignee list comes from the assignable-users endpoint so only a valid account is ever sent. |
-| Marking app-created tickets | Our `tickets` table stores only issue keys we created (scoped by user; titles fetched live from Jira) plus a Jira label `identityhub-finding`                                                                                                                     | Table is the source of truth for the Recent view; the label is durable and survives a DB reset.                                                                            |
-| Out of scope                | Optional fields outside the curated set, arbitrary custom fields, editing/transitioning/deleting issues, attachments, JSM request types, subtasks, epics, links                                                                                                   | Not needed for the POC.                                                                                                                                                    |
+| Area                        | Decision                                                                                                                                                                                                                                                          | Reason                                                                                                                                                                                                                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Projects                    | Only projects the user can create issues in, from the per-project createmeta endpoints (`getCreateIssueMetaIssueTypes`, `getCreateIssueMetaIssueTypeId`)                                                                                                          | `project/search` also returns browse-only projects that would 403 on create. The bulk `createmeta` is deprecated. The backend pages through every creatable project (no cap), so the picker's fuzzy search covers the whole workspace. |
+| Issue type                  | Always `Task`, validated per project, falling back to the first issue type the project allows if `Task` is absent                                                                                                                                                 | A finding maps to a task; no value in exposing Bug or Story.                                                                                                                                                                           |
+| Base fields                 | Title to `summary` and Description to `description`, both always shown and both required                                                                                                                                                                          | Required by the assignment; minimal and intuitive.                                                                                                                                                                                     |
+| Required fields             | Every field the project marks required is rendered dynamically                                                                                                                                                                                                    | So create never fails on a project that requires extra fields.                                                                                                                                                                         |
+| Optional fields             | A curated set shown only when the project exposes them: priority, labels, assignee, due date, components                                                                                                                                                          | Useful for a real finding without supporting every field.                                                                                                                                                                              |
+| Field rendering             | Text fields as inputs, date fields as a date picker (submitting only valid `yyyy-MM-dd`), enum fields (priority, selects) as dropdowns of their `allowedValues`, the assignee (user) field as a dropdown of the project's assignable users, labels as a tag input | Driven by createmeta `required` flag, `schema.type`, and `allowedValues`; the assignee list comes from the assignable-users endpoint so only a valid account is ever sent.                                                             |
+| Marking app-created tickets | Our `tickets` table stores only issue keys we created (scoped by user; titles fetched live from Jira) plus a Jira label `identityhub-finding`                                                                                                                     | Table is the source of truth for the Recent view; the label is durable and survives a DB reset.                                                                                                                                        |
+| Out of scope                | Optional fields outside the curated set, arbitrary custom fields, editing/transitioning/deleting issues, attachments, JSM request types, subtasks, epics, links                                                                                                   | Not needed for the POC.                                                                                                                                                                                                                |
 
 ---
 
@@ -916,9 +1105,11 @@ chose and why.
   plus `read:me` for the identity call on `api.atlassian.com`, plus
   `offline_access` for refresh tokens.
 - One user equals one tenant equals one connected Jira site (see Tenancy model).
-- Recent Tickets shows only the acting user's app-created tickets from our own
-  `tickets` table, filtered by selected project, capped at 10. Tickets created
-  directly in Jira are out of scope by design.
+- Recent Tickets is a shared per-project view: it shows app-created tickets for
+  the selected project from our own `tickets` table regardless of which user
+  created them, capped at 10, but filtered through the acting user's Jira token
+  so only issues that user can see are returned. Tickets created directly in
+  Jira are out of scope by design.
 - Machine callers use API keys created by a human in the UI, then configured into
   the scanner or CI system.
 - Callback URL for local run: `http://localhost:3000/auth/callback`.
