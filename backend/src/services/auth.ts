@@ -8,8 +8,8 @@
  * client, models, and redis; holds no HTTP concerns (those live in the api
  * layer).
  */
-import { jiraClient } from "../jira/jira.ts";
 import { config } from "../config.ts";
+import { jiraClient } from "../jira/jira.ts";
 import { Tokens } from "../lib/tokens.ts";
 import { JiraConnectionsModel } from "../models/jira-connections.ts";
 import { SessionsModel } from "../models/sessions.ts";
@@ -106,6 +106,7 @@ export class AuthService {
   }
 
   /** End a session (logout). Idempotent. */
+  // do not revoke the underline jira token because we may have a api key that is being used by machines like ci/cd right now.
   public static async logout(sessionId: string): Promise<void> {
     await SessionsModel.delete(sessionId);
   }

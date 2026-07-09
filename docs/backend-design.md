@@ -18,7 +18,7 @@ This document covers the backend only. The UI is in
 - [Credential storage](#credential-storage)
 - [API keys](#api-keys)
 - [API surface](#api-surface)
-- [Typed client, OpenAPI, and health](#typed-client-openapi-and-health)
+- [Typed client and OpenAPI](#typed-client-and-openapi)
 - [REST API for machine callers](#rest-api-for-machine-callers)
 - [Jira client and rate limiting](#jira-client-and-rate-limiting)
 - [Caching](#caching)
@@ -392,51 +392,55 @@ Operational, unauthenticated:
 | ----------------- | ------------------------------------------- |
 | GET /openapi.json | OpenAPI spec (generated from route schemas) |
 | GET /docs         | Swagger UI                                  |
-| GET /health/live  | Liveness probe                              |
-| GET /health/ready | Readiness probe (checks Postgres and Redis) |
 
 ### Error and retry policy (our endpoints)
 
+Retries are a backend concern; clients do not retry. Every outbound
+Jira/Atlassian call is retried inside the backend (see
+[Retry and recoverability](#retry-and-recoverability-outbound-jiraatlassian-calls)):
+the transport layer retries transient 429/503/5xx on idempotent GETs and 429 on
+the create POST, and the auth layer refreshes once and retries on a Jira 401. A
+response returned to the caller is **final** — the backend already exhausted the
+retries that make sense, so there is nothing useful for a client to re-drive.
+
 Every failure is mapped to one status by the central handler
-(`api/error-handler.ts`): user-input errors are 400/404, auth/reconnect is 401,
-an upstream Jira failure is 502, and anything unexpected is 500.
+(`api/error-handler.ts`):
 
-By the time an error reaches a caller, the backend has already applied its own
-internal retries (see [Retry and recoverability](#retry-and-recoverability-outbound-jiraatlassian-calls)):
-transient rate-limit/5xx on idempotent GETs and 429 on the create POST
-(transport), plus one token-refresh retry on a Jira 401 (auth). So a status that
-reaches the client is post-retry; a client retry is a thin second layer.
+- **401 (two distinct causes)**:
+  - _Session 401_ — no/expired session cookie; the `sessionOnly` middleware
+    rejects before the handler runs. Fix: log in again (any authenticated
+    endpoint can return this).
+  - _Reconnect 401_ — the Jira connection itself is unusable: no connection
+    (`NotConnectedError`) or the refresh token is dead (`RefreshTokenExpiredError`,
+    from a 400/403 `invalid_grant`). Message: "Your Jira connection needs to be
+    re-established." Fix: re-run the OAuth consent flow (`/auth/login`). Only
+    endpoints that actually use the Jira token can return this. A retry cannot
+    fix either 401 — hence "401 -> reconnect" in the table.
+- **502**: the backend called Jira, retried the configured number of times, and
+  it still failed. Terminal for this request.
+- **400 / 404**: bad input, missing permission, or the resource is gone.
+- **500**: unexpected. A create is never blindly re-issued on 5xx server-side
+  (non-idempotent; it may already have been applied).
 
-Recoverable vs terminal for the caller:
+"Retried in backend" is the internal retry applied while handling the call; the
+client just receives the final status.
 
-- 502 (Jira upstream, transient after our retries), 503 (dependency not ready),
-  500 (unexpected): recoverable. A client may retry an **idempotent** call with
-  backoff (we suggest up to 3, jittered).
-- 401: terminal for retry. The Jira connection must be re-established (OAuth
-  reconnect), not retried.
-- 400 / 404: terminal. Fix the input, or the resource is gone.
-- A create (`POST /api/v1/findings`, `POST /api/tickets`, `POST /api/api-keys`)
-  is **not** auto-retried on 5xx: it is non-idempotent and may already have been
-  applied, so a blind retry risks a duplicate. Surface and let the user confirm.
+| Method and path                  | Statuses                | Retried in backend (internal)         | Client outcome (no client retry)                                   |
+| -------------------------------- | ----------------------- | ------------------------------------- | ------------------------------------------------------------------ |
+| GET /api/me                      | 200, 401, 500           | none (DB only, no Jira call)          | 401 session -> log in                                              |
+| GET /api/projects                | 200, 401, 502, 500      | Jira GET: 429/503/5xx x4, 401 refresh | 401 session -> log in; 401 -> reconnect; 502/500 shown             |
+| GET /api/projects/:key/assignees | 200, 400, 401, 502, 500 | Jira GET: 429/503/5xx x4, 401 refresh | 400 (bad project / no "Browse users" perm); 401 -> reconnect       |
+| GET /api/tickets?projectKey      | 200, 401, 502, 500      | Jira GET: 429/503/5xx x4, 401 refresh | 401 -> reconnect; 502/500 shown                                    |
+| POST /api/tickets                | 201, 400, 401, 502, 500 | create POST: 429 x4, 401 refresh      | 400 field/validation; 401 -> reconnect; 502 shown (not re-created) |
+| POST /api/v1/findings            | 201, 400, 401, 502, 500 | create POST: 429 x4, 401 refresh      | same as POST /api/tickets                                          |
+| GET /api/api-keys                | 200, 401, 500           | none (DB only)                        | 401 session -> log in                                              |
+| POST /api/api-keys               | 201, 400, 401, 500      | none (DB only)                        | 400 validation; 401 session                                        |
+| DELETE /api/api-keys/:id         | 200, 404, 401, 500      | none (DB only)                        | 404 (already gone); 401 session                                    |
+| GET /auth/login                  | 302                     | n/a                                   | redirect to Atlassian authorize                                    |
+| GET /auth/callback               | 302                     | n/a                                   | redirect to / or /login?error (invalid/expired state)              |
+| POST /auth/logout                | 200                     | n/a                                   | -                                                                  |
 
-| Method and path                  | Statuses                   | Recoverable -> client retry    | Terminal                                                              |
-| -------------------------------- | -------------------------- | ------------------------------ | --------------------------------------------------------------------- |
-| GET /api/me                      | 200, 401, 502, 500         | 502/500 -> x3 backoff          | 401 -> reconnect                                                      |
-| GET /api/projects                | 200, 401, 502, 500         | 502/500 -> x3 backoff          | 401 -> reconnect                                                      |
-| GET /api/projects/:key/assignees | 200, 400, 401, 502, 500    | 502/500 -> x3 backoff          | 400 (bad project / no "Browse users" permission), 401 -> reconnect    |
-| GET /api/tickets?projectKey      | 200, 401, 502, 500         | 502/500 -> x3 backoff          | 401 -> reconnect                                                      |
-| POST /api/tickets                | 201, 400, 401, 502, 500    | none (non-idempotent create)   | 400 field/validation, 401 -> reconnect; 5xx -> surface, no auto-retry |
-| POST /api/v1/findings            | 201, 400, 401, 502, 500    | none (non-idempotent create)   | same as POST /api/tickets                                             |
-| GET /api/api-keys                | 200, 401, 500              | 500 -> x3 backoff              | 401                                                                   |
-| POST /api/api-keys               | 201, 400, 401, 500         | none (non-idempotent create)   | 400, 401; 5xx -> surface                                              |
-| DELETE /api/api-keys/:id         | 200, 404, 401, 500         | 500 -> x3 backoff (idempotent) | 404 (already gone), 401                                               |
-| GET /auth/login                  | 302                        | n/a (redirect)                 | -                                                                     |
-| GET /auth/callback               | 302 (to / or /login?error) | n/a (user restarts login)      | invalid/expired state -> /login?error                                 |
-| POST /auth/logout                | 200                        | 500 -> x3 (idempotent)         | -                                                                     |
-| GET /health/live                 | 200                        | n/a (orchestrator restarts)    | -                                                                     |
-| GET /health/ready                | 200, 503                   | 503 -> orchestrator re-polls   | -                                                                     |
-
-## Typed client, OpenAPI, and health
+## Typed client and OpenAPI
 
 ### Typed frontend client (no codegen)
 
@@ -463,14 +467,6 @@ Recoverable vs terminal for the caller:
 - The Zod schemas on each route generate the OpenAPI document automatically.
 - `GET /openapi.json` serves the spec; `GET /docs` serves Swagger UI via
   `@hono/swagger-ui`. No hand-written OpenAPI.
-
-### Health probes
-
-- `GET /health/live` (liveness): returns 200 if the process is up. No dependency
-  checks. A failure tells the orchestrator to restart the process.
-- `GET /health/ready` (readiness): returns 200 only if Postgres and Redis are
-  both reachable, otherwise 503. A failure tells the orchestrator to stop routing
-  traffic until dependencies recover.
 
 ## REST API for machine callers
 

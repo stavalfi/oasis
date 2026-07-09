@@ -11,7 +11,7 @@ import { config } from "../config.ts";
 export const redis = new Redis({
   host: config.redis.host,
   // Fail a command after a few retries rather than blocking forever, so a Redis
-  // outage surfaces quickly (and the readiness probe can report it).
+  // outage surfaces quickly instead of hanging requests.
   maxRetriesPerRequest: 3,
   password: config.redis.password,
   port: config.redis.port,
