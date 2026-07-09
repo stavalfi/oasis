@@ -89,7 +89,6 @@
     "kysely-codegen",
     "pg",
     "@types/pg",
-    "devcert",
     "@hono/zod-openapi",
     "ioredis",
     "cache-manager",

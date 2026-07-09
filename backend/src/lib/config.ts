@@ -118,6 +118,10 @@ export const config = deepFreeze({
   server: {
     oauthCallbackUrl: env.OAUTH_CALLBACK_URL,
     port: env.PORT,
+    // Self-signed TLS material generated (no sudo) by backend/scripts/start.sh
+    // with openssl. Paths are relative to the repo root, the process CWD.
+    tlsCertFile: "backend/certs/localhost.crt",
+    tlsKeyFile: "backend/certs/localhost.key",
   },
 } as const);
 
