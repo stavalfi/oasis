@@ -6,7 +6,7 @@
  */
 import type { MeResponse } from "../dto/types.ts";
 import { meResponseSchema } from "../dto/schemas.ts";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import { JiraConnectionsModel } from "../models/jira-connections.ts";
 import { UsersModel } from "../models/users.ts";
 import { Cache } from "../redis/cache.ts";

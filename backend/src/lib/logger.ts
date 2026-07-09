@@ -9,7 +9,7 @@
  */
 import pino from "pino";
 import type { Logger } from "pino";
-import { config } from "./config.ts";
+import { config } from "../config.ts";
 
 export type { Logger };
 

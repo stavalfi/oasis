@@ -5,7 +5,7 @@
  * the `redis/` directory talks to Redis directly.
  */
 import { Redis } from "ioredis";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 
 /** The shared Redis connection. Used by the cache and the OAuth state store. */
 export const redis = new Redis({

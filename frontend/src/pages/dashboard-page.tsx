@@ -24,9 +24,14 @@ export const DashboardPage = (): ReactNode => {
     <div className="page">
       <Header />
       <main className="dashboard">
+        <section className="card dashboard__picker">
+          <ProjectPicker />
+          <p className="dashboard__picker-hint">
+            The selected project drives both the finding form and the recent tickets below.
+          </p>
+        </section>
         <section className="card">
           <h2 className="card__title">Report a finding</h2>
-          <ProjectPicker />
           <CreateFindingForm />
         </section>
         <section className="card">

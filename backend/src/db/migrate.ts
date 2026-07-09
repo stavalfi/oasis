@@ -11,7 +11,7 @@ import path from "node:path";
 import { Kysely, PostgresDialect } from "kysely";
 import { FileMigrationProvider, Migrator } from "kysely/migration";
 import { Pool } from "pg";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 
 class MigrationRunner {
   /** Build a short-lived Kysely instance for running migrations (DDL only). */

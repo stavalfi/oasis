@@ -15,7 +15,7 @@ import { createCache } from "cache-manager";
 import type { Cache as CacheManagerCache } from "cache-manager";
 import { Keyv } from "keyv";
 import type { ZodType } from "zod";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 
 export class Cache {
   /** Two-tier cache-manager instance: in-memory L1 plus a shared Redis L2. */

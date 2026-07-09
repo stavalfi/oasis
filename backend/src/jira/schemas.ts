@@ -56,6 +56,13 @@ export const assignableUsersSchema = z.array(
 
 export const createdIssueSchema = z.object({ key: z.string() });
 
-export const issueSummarySchema = z.object({
-  fields: z.object({ summary: z.string().nullable().optional() }).optional(),
+export const issueDetailsSchema = z.object({
+  fields: z
+    .object({
+      priority: z.object({ name: z.string().optional() }).nullable().optional(),
+      reporter: z.object({ displayName: z.string().optional() }).nullable().optional(),
+      status: z.object({ name: z.string().optional() }).nullable().optional(),
+      summary: z.string().nullable().optional(),
+    })
+    .optional(),
 });

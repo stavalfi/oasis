@@ -7,7 +7,7 @@
  * raw key is shown to the user exactly once.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { config } from "./config.ts";
+import { config } from "../config.ts";
 
 /** A newly minted API key: the raw value (shown once) and the hash we store. */
 export interface GeneratedApiKey {

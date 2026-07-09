@@ -21,7 +21,7 @@ import {
   getIssue,
   searchProjects,
 } from "#jira/index.ts";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import { JiraApiError } from "./errors/jira-api-error.ts";
 import { RefreshTokenExpiredError } from "./errors/refresh-token-expired-error.ts";
 import {
@@ -29,7 +29,7 @@ import {
   createdIssueSchema,
   fieldsSchema,
   identitySchema,
-  issueSummarySchema,
+  issueDetailsSchema,
   issueTypesSchema,
   projectsSchema,
   resourcesSchema,
@@ -385,8 +385,13 @@ export class JiraClient {
     return { key: createdIssueSchema.parse(data).key };
   }
 
-  /** Read an issue's current summary (for the live Recent Tickets title). */
-  public async getIssueSummary({
+  /**
+   * Read an issue's current title and reporter (for the live Recent Tickets
+   * row). Returns `undefined` if the issue no longer exists in Jira (404, i.e.
+   * it was deleted), so the caller can drop the stale reference. Other failures
+   * throw.
+   */
+  public async getIssueDetails({
     cloudId,
     accessToken,
     issueKey,
@@ -394,22 +399,39 @@ export class JiraClient {
     cloudId: string;
     accessToken: string;
     issueKey: string;
-  }): Promise<string | undefined> {
+  }): Promise<
+    | {
+        title: string | undefined;
+        reporter: string | undefined;
+        priority: string | undefined;
+        status: string | undefined;
+      }
+    | undefined
+  > {
     const { data, response } = await getIssue({
       baseUrl: JiraClient.#jiraApiBase(cloudId),
       client: this.#jiraClient,
       headers: { Authorization: `Bearer ${accessToken}` },
       path: { issueIdOrKey: issueKey },
-      query: { fields: [...config.constants.jira.issueSummaryFields] },
+      query: { fields: [...config.constants.jira.issueDetailFields] },
     });
     if (data === undefined) {
+      if (response?.status === 404) {
+        return undefined;
+      }
       throw new JiraApiError({
         message: "Failed to read issue.",
         operation: "get_issue",
         status: response?.status ?? 0,
       });
     }
-    return issueSummarySchema.parse(data).fields?.summary ?? undefined;
+    const { fields } = issueDetailsSchema.parse(data);
+    return {
+      priority: fields?.priority?.name ?? undefined,
+      reporter: fields?.reporter?.displayName ?? undefined,
+      status: fields?.status?.name ?? undefined,
+      title: fields?.summary ?? undefined,
+    };
   }
 }
 

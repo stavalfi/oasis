@@ -9,7 +9,7 @@
  */
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import type { DB } from "./schema.ts";
 
 /** The shared Postgres pool. Exposed for pool-usage metrics and shutdown. */

@@ -66,8 +66,9 @@ export const config = deepFreeze({
       assignableUsersPageSize: 100,
       // The identity (/me) endpoint.
       identityUrl: "https://api.atlassian.com/me",
-      // Only the summary is fetched when refreshing a Recent Tickets title.
-      issueSummaryFields: ["summary"],
+      // Fields fetched live per Recent Tickets row: title, reporter, priority,
+      // and status (priority/status shown only when the issue has them).
+      issueDetailFields: ["summary", "reporter", "priority", "status"],
       // Retry budget: 4 retries (5 attempts total).
       maxRetries: 4,
       // Cap for a single page of creatable projects (POC: one page is enough).

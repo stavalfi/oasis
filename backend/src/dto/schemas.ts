@@ -7,7 +7,7 @@
  * (frontend/src/api/types.ts) and does not depend on zod.
  */
 import { z } from "zod";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 
 /** Current user and their connected Jira site. */
 export const meResponseSchema = z.object({
@@ -52,10 +52,13 @@ export const assigneeSchema = z.object({
 
 export const assigneesResponseSchema = z.array(assigneeSchema);
 
-/** A recent app-created ticket (title fetched live from Jira). */
+/** A recent app-created ticket (title/reporter/priority/status live from Jira). */
 export const ticketSchema = z.object({
   createdAt: z.string(),
   key: z.string(),
+  priority: z.string().optional(),
+  reporter: z.string(),
+  status: z.string().optional(),
   title: z.string(),
   url: z.string(),
 });

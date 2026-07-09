@@ -7,7 +7,7 @@
  */
 import { serve } from "@hono/node-server";
 import { app } from "./api/app.ts";
-import { config } from "./lib/config.ts";
+import { config } from "./config.ts";
 import { logger } from "./lib/logger.ts";
 
 serve(

@@ -29,10 +29,21 @@ export const RecentTicketsList = (): ReactNode => {
           <a className="tickets__link" href={ticket.url} rel="noopener" target="_blank">
             <span className="tickets__key">{ticket.key}</span>
             <span className="tickets__title">{ticket.title}</span>
+            {ticket.status !== undefined && (
+              <span className="tickets__status">{ticket.status}</span>
+            )}
           </a>
-          <time className="tickets__time" dateTime={ticket.createdAt}>
-            {formatRelativeTime(ticket.createdAt)}
-          </time>
+          <span className="tickets__meta">
+            <span className="tickets__reporter">
+              {ticket.reporter}
+              {ticket.priority !== undefined && (
+                <span className="tickets__priority"> · {ticket.priority}</span>
+              )}
+            </span>
+            <time className="tickets__time" dateTime={ticket.createdAt}>
+              {formatRelativeTime(ticket.createdAt)}
+            </time>
+          </span>
         </li>
       ))}
     </ul>

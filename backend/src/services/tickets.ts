@@ -5,19 +5,20 @@
  * machine REST API. Create validates input against the project's createmeta
  * (required fields, length limits from config), maps curated/required field
  * values into Jira's shape, creates the issue, records our reference, and
- * invalidates the recent-tickets cache. Recent Tickets reads our references and
- * fetches current titles live from Jira. Both are scoped to the acting user.
+ * invalidates the recent-tickets cache. Recent Tickets reads our references
+ * (scoped to the selected project, across all app users) and fetches each
+ * issue's current title, reporter, priority, and status live from Jira.
  */
-import type { CreateFindingRequest, CreateFindingResponse, Ticket } from "../dto/types.ts";
+import { config } from "../config.ts";
 import { recentTicketsResponseSchema } from "../dto/schemas.ts";
+import type { CreateFindingRequest, CreateFindingResponse, Ticket } from "../dto/types.ts";
 import { jiraClient } from "../jira/jira.ts";
 import type { JiraFieldMeta } from "../jira/types.ts";
-import { config } from "../lib/config.ts";
 import { TicketsModel } from "../models/tickets.ts";
 import { Cache } from "../redis/cache.ts";
 import { InvalidFindingError } from "./errors/invalid-finding-error.ts";
-import { JiraAccess } from "./jira-access.ts";
 import { ProjectNotFoundError } from "./errors/project-not-found-error.ts";
+import { JiraAccess } from "./jira-access.ts";
 
 export class TicketsService {
   /** Whether a provided field value counts as present (non-empty). */
@@ -189,26 +190,36 @@ export class TicketsService {
     projectKey: string;
   }): Promise<Ticket[]> {
     const connection = await JiraAccess.getFreshConnection(userId);
+    // Project-scoped: every app-created ticket for this project, regardless of
+    // which app user created it. Titles + reporter are read live from Jira.
     const rows = await TicketsModel.listRecent({
       limit: config.constants.recentTicketsLimit,
       projectKey,
-      userId,
     });
-    return Promise.all(
-      rows.map(async (row): Promise<Ticket> => {
-        const title = await jiraClient.getIssueSummary({
+    const tickets = await Promise.all(
+      rows.map(async (row): Promise<Ticket | undefined> => {
+        const details = await jiraClient.getIssueDetails({
           accessToken: connection.accessToken,
           cloudId: connection.cloudId,
           issueKey: row.jira_issue_key,
         });
+        // Dropped if the issue no longer exists in Jira (deleted) or isn't
+        // visible from this connection, so the list never shows a dead link.
+        if (details === undefined) {
+          return undefined;
+        }
         return {
           createdAt: row.created_at.toISOString(),
           key: row.jira_issue_key,
-          title: title ?? row.jira_issue_key,
+          reporter: details.reporter ?? "Unknown",
+          title: details.title ?? row.jira_issue_key,
           url: `${connection.siteUrl}/browse/${row.jira_issue_key}`,
+          ...(details.priority === undefined ? {} : { priority: details.priority }),
+          ...(details.status === undefined ? {} : { status: details.status }),
         };
       }),
     );
+    return tickets.filter((ticket): ticket is Ticket => ticket !== undefined);
   }
 
   /**

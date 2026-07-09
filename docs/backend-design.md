@@ -81,7 +81,8 @@ backend/src/
   db/
     migrations/ Kysely migration files.
     schema.ts   typed database schema for Kysely.
-  lib/          crypto (field-level encryption), config, logger.
+  lib/          crypto (field-level encryption), logger.
+  config.ts     the single env reader + typed, frozen config (next to index.ts).
   index.ts      entry point, wires the layers together.
 ```
 
@@ -126,7 +127,7 @@ Strictness:
 
 Configuration:
 
-- A single `backend/src/lib/config.ts` is the only file that reads the environment
+- A single `backend/src/config.ts` is the only file that reads the environment
   (`process.env` / `Bun.env`). It validates the whole environment with a Zod
   schema at startup (unknown vars ignored) and exposes a typed, deeply frozen
   config object (recursively frozen with `deep-freeze-es6`).

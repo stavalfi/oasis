@@ -21,6 +21,7 @@
   "rules": {
     "import/consistent-type-specifier-style": ["error", "prefer-top-level"],
     "import/no-dynamic-require": ["error", { "esmodule": true }],
+    "oxc/no-map-spread": "off",
     "poc-rules/no-anonymous-functions": "error",
     "poc-rules/no-zod-passthrough": "error",
     "poc-rules/require-access-modifiers": "error",

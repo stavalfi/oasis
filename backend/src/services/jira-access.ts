@@ -8,7 +8,7 @@
  * NotConnectedError to the API layer.
  */
 import { jiraClient } from "../jira/jira.ts";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import { JiraConnectionsModel } from "../models/jira-connections.ts";
 import { NotConnectedError } from "./errors/not-connected-error.ts";
 

@@ -11,7 +11,7 @@
  * isolation mechanism (see the Multi-tenant isolation section of the design).
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { config } from "./config.ts";
+import { config } from "../config.ts";
 
 /** AES-256-GCM parameters. The key is 32 bytes; GCM standard IV is 12 bytes. */
 const ALGORITHM = "aes-256-gcm";

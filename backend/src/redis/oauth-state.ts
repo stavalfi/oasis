@@ -6,7 +6,7 @@
  * atomically (GETDEL), so a state cannot be replayed. Part of the redis choke
  * point.
  */
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import { redis } from "./client.ts";
 
 export class OAuthStateStore {

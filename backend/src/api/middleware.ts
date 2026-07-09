@@ -11,7 +11,7 @@ import { deleteCookie, getCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { routePath } from "hono/route";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import { logger } from "../lib/logger.ts";
 import { ApiKeysService } from "../services/api-keys.ts";
 import { AuthService } from "../services/auth.ts";

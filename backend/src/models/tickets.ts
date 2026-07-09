@@ -28,22 +28,20 @@ export class TicketsModel {
   }
 
   /**
-   * The most recent app-created tickets for a user and project, newest first,
-   * capped at `limit`. Object-level scoping by `user_id` is in the query itself.
+   * The most recent app-created tickets for a project, newest first, capped at
+   * `limit`. Project-scoped (not per-user): every app user's tickets for the
+   * project appear, matching the "Recent Tickets for the selected project" view.
    */
   public static listRecent({
-    userId,
     projectKey,
     limit,
   }: {
-    userId: string;
     projectKey: string;
     limit: number;
   }): Promise<TicketRow[]> {
     return db
       .selectFrom("tickets")
       .selectAll()
-      .where("user_id", "=", userId)
       .where("project_key", "=", projectKey)
       .orderBy("created_at", "desc")
       .limit(limit)

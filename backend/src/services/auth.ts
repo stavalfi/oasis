@@ -9,7 +9,7 @@
  * layer).
  */
 import { jiraClient } from "../jira/jira.ts";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import { Tokens } from "../lib/tokens.ts";
 import { JiraConnectionsModel } from "../models/jira-connections.ts";
 import { SessionsModel } from "../models/sessions.ts";

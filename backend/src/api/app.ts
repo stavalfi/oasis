@@ -22,7 +22,7 @@ import {
   projectsResponseSchema,
   recentTicketsResponseSchema,
 } from "../dto/schemas.ts";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import {
   ApiKeysService,
   AuthService,

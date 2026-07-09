@@ -106,11 +106,20 @@ export const CreateFindingForm = (): ReactNode => {
     const fields: Record<string, unknown> = {};
     for (const field of project.fields) {
       const value = (draft.fieldValues[field.fieldId] ?? "").trim();
-      const isDate = field.type === "date" || field.type === "datetime";
-      // Only send a field the user actually filled. A date value that isn't a
-      // valid yyyy-MM-dd (e.g. a stale draft the date picker can't display) is
-      // treated as empty, so we never submit a field that looks blank.
-      const isUsable = value.length > 0 && (!isDate || /^\d{4}-\d{2}-\d{2}$/u.test(value));
+      // Only send a value the current control can actually hold. This drops
+      // stale draft values the control can't display (e.g. an old free-text
+      // "111" now that the field is a dropdown or date picker), so we never
+      // submit a field that looks empty on screen.
+      let isUsable = value.length > 0;
+      if (isUsable && field.type === "user") {
+        isUsable = assignees.some((user) => user.accountId === value);
+      } else if (isUsable && field.allowedValues !== undefined && field.allowedValues.length > 0) {
+        isUsable = field.allowedValues.some(
+          (allowed) => (allowed.id ?? allowed.value ?? "") === value,
+        );
+      } else if (isUsable && (field.type === "date" || field.type === "datetime")) {
+        isUsable = /^\d{4}-\d{2}-\d{2}$/u.test(value);
+      }
       if (isUsable) {
         fields[field.fieldId] =
           field.type === "array"

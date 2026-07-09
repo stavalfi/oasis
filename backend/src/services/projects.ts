@@ -11,7 +11,7 @@ import type { Assignee, FieldMeta, Project } from "../dto/types.ts";
 import { assigneesResponseSchema, projectsResponseSchema } from "../dto/schemas.ts";
 import { jiraClient } from "../jira/jira.ts";
 import type { JiraFieldMeta } from "../jira/types.ts";
-import { config } from "../lib/config.ts";
+import { config } from "../config.ts";
 import { Cache } from "../redis/cache.ts";
 import { JiraAccess } from "./jira-access.ts";
 
