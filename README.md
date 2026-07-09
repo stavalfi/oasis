@@ -5,21 +5,24 @@ Design docs: [backend](docs/backend-design.md), [frontend](docs/frontend-design.
 
 ## Prerequisites
 
-- Nodejs v26 (runtime), Bun (as package manager), Docker (for Postgres and Redis).
+- nodejs v26
+- Docker (for Postgres and Redis)
+- chromium (for frontend e2e tests)
 - A `.env` file with the Jira OAuth credentials and Postgres/Redis settings
   (see the Run locally section of the backend design doc for the full list).
 
 ## Setup
 
 ```bash
-bun install
-bun run docker-compose:up   # start Postgres and Redis
+npm install
+npm run docker-compose:up   # start Postgres and Redis
 ```
 
 ## Run
 
 ```bash
-bun run backend    # migrate DB -> generate Kysely types -> start server + serve the frontend
+npm run backend    # migrate DB -> generate Kysely types -> start server + serve the frontend
+npm run scraper    # migrate DB -> generate Kysely types -> start scraper -->> bonus task
 ```
 
 now go to: http://localhost:3000

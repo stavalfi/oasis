@@ -11,7 +11,7 @@ Render a Markdown file into a Google Doc using the `devex update-gdoc` command
 ## Command
 
 ```bash
-bun run cli devex update-gdoc --file <markdown-file> [--doc-id <id>] [--replace] [--title <title>]
+npm run cli devex update-gdoc --file <markdown-file> [--doc-id <id>] [--replace] [--title <title>]
 ```
 
 Run it from the repo root (where `package.json` defines the `cli` script).
@@ -49,19 +49,19 @@ The doc id is the path segment in the URL:
 Append to an existing doc:
 
 ```bash
-bun run cli devex update-gdoc --file /tmp/gdoc-content.md --doc-id <DOC_ID>
+npm run cli devex update-gdoc --file /tmp/gdoc-content.md --doc-id <DOC_ID>
 ```
 
 Rebuild an existing doc in place (clear then write fresh):
 
 ```bash
-bun run cli devex update-gdoc --file /tmp/gdoc-content.md --doc-id <DOC_ID> --replace
+npm run cli devex update-gdoc --file /tmp/gdoc-content.md --doc-id <DOC_ID> --replace
 ```
 
 Create a new doc:
 
 ```bash
-bun run cli devex update-gdoc --file /tmp/gdoc-content.md --title "My Doc"
+npm run cli devex update-gdoc --file /tmp/gdoc-content.md --title "My Doc"
 ```
 
 On success it prints `Done: https://docs.google.com/document/d/<id>/edit`. Relay that URL.

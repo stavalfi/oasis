@@ -16,11 +16,11 @@ import type {
   TemplateLiteral,
   VariableDeclarator,
 } from "estree";
+import { z } from "zod";
 
 interface TsAccessibility {
   accessibility?: "public" | "protected" | "private";
 }
-import { z } from "zod";
 
 const NoBannedWordsGroupSchema = z.object({
   message: z.string(),
@@ -220,7 +220,7 @@ const noCustomResource: Rule.RuleModule = {
           context.report({
             node,
             message:
-              "Do not use CustomResource from @pulumi/kubernetes/apiextensions. find the crd yaml online, move it to devops/crds/external and then run: bun run codegen",
+              "Do not use CustomResource from @pulumi/kubernetes/apiextensions. find the crd yaml online, move it to devops/crds/external and then run: npm run codegen",
           });
         }
       },

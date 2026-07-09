@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs `bun install` if any of package.json / bun.lock / bunfig.toml differs
+# Runs `npm install` if any of package.json / bun.lock / bunfig.toml differs
 # between two git refs. Used by post-checkout / post-merge / post-rewrite to
 # keep node_modules in sync after branch switches / merges / rebases.
 #
@@ -11,6 +11,6 @@ cd "${repo_root}"
 
 from="${1}"
 to="${2}"
-if ! git diff --quiet "${from}" "${to}" -- package.json bun.lock bunfig.toml; then
-  bun install
+if ! git diff --quiet "${from}" "${to}" -- package.json package-lock.json; then
+  npm install
 fi

@@ -1,6 +1,6 @@
 // Config for @hey-api/openapi-ts: generate a typed Jira Cloud client from the
 // vendored Atlassian OpenAPI v3 spec, filtered to only the operations
-// IdentityHub calls. Run via `bun run codegen`. Output is committed under
+// IdentityHub calls. Run via `npm run codegen`. Output is committed under
 // devex/generated/jira and consumed by backend/src/jira.
 export default {
   input: {

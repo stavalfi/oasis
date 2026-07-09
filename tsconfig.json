@@ -45,6 +45,7 @@
     { "path": "devex/scripts" },
     { "path": "devex/configs" },
     { "path": "backend" },
-    { "path": "frontend" }
+    { "path": "frontend" },
+    { "path": "scraper" }
   ]
 }

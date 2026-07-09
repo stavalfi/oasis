@@ -8,7 +8,7 @@
  * A single AbortController ties every child process to the launcher: on
  * SIGINT/SIGTERM, or once the server exits, the signal aborts and the
  * background frontend watcher and log pretty-printer are torn down with it.
- * Run by `bun run backend`.
+ * Run by `npm run backend`.
  */
 import type { ChildProcess, StdioOptions } from "node:child_process";
 import { spawn } from "node:child_process";

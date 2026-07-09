@@ -58,13 +58,21 @@ export const assignableUsersSchema = z.array(
 
 export const createdIssueSchema = z.object({ key: z.string() });
 
-export const issueDetailsSchema = z.object({
-  fields: z
-    .object({
-      priority: z.object({ name: z.string().optional() }).nullable().optional(),
-      reporter: z.object({ displayName: z.string().optional() }).nullable().optional(),
-      status: z.object({ name: z.string().optional() }).nullable().optional(),
-      summary: z.string().nullable().optional(),
-    })
-    .optional(),
+// The subset of Jira issue fields Recent Tickets renders (see
+// config.constants.jira.issueDetailFields). Shared by the bulk-fetch response.
+const issueDetailFieldsSchema = z
+  .object({
+    priority: z.object({ name: z.string().optional() }).nullable().optional(),
+    reporter: z.object({ displayName: z.string().optional() }).nullable().optional(),
+    status: z.object({ name: z.string().optional() }).nullable().optional(),
+    summary: z.string().nullable().optional(),
+  })
+  .optional();
+
+// POST /issue/bulkfetch response. Jira only returns issues the acting token can
+// see; issues that are deleted or permission-denied are simply absent from
+// `issues` (they surface, if at all, in a separate `issueErrors` list we ignore),
+// so the presence of a key doubles as the Recent Tickets visibility filter.
+export const bulkIssuesSchema = z.object({
+  issues: z.array(z.object({ fields: issueDetailFieldsSchema, key: z.string() })).optional(),
 });

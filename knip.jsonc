@@ -83,6 +83,9 @@
     // see these static imports. Remove once knip scans those trees.
     "deep-freeze-es6",
     "ky",
+    // IdentityHub scraper service (scraper/) — also outside knip's project scope.
+    "kafkajs",
+    "cheerio",
     "kysely",
     "kysely-codegen",
     "pg",

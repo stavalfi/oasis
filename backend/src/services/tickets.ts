@@ -13,6 +13,7 @@ import { config } from "../config.ts";
 import { recentTicketsResponseSchema } from "../dto/schemas.ts";
 import type { CreateFindingRequest, CreateFindingResponse, Ticket } from "../dto/types.ts";
 import { jiraClient } from "../jira/jira.ts";
+import type { IssueDisplayDetails } from "../jira/jira.ts";
 import type { JiraFieldMeta } from "../jira/types.ts";
 import { Retry } from "../lib/retry.ts";
 import { TicketsModel } from "../models/tickets.ts";
@@ -204,26 +205,16 @@ export class TicketsService {
     });
   }
 
-  /**
-   * Resolve one ticket row to its live view, or undefined if the acting user
-   * cannot see the issue (deleted, or not visible from this connection), so it
-   * is dropped from the list rather than shown as a dead link.
-   */
-  static async #resolveTicket({
+  /** Build the live Recent Tickets view of a row from its fetched Jira details. */
+  static #toTicket({
     connection,
     row,
+    details,
   }: {
     connection: FreshConnection;
     row: TicketRow;
-  }): Promise<Ticket | undefined> {
-    const details = await jiraClient.getIssueDetails({
-      accessToken: connection.accessToken,
-      cloudId: connection.cloudId,
-      issueKey: row.jira_issue_key,
-    });
-    if (details === undefined) {
-      return undefined;
-    }
+    details: IssueDisplayDetails;
+  }): Ticket {
     return {
       createdAt: row.created_at.toISOString(),
       key: row.jira_issue_key,
@@ -268,12 +259,18 @@ export class TicketsService {
             break;
           }
           scanned += rows.length;
-          const resolved = await Promise.all(
-            rows.map((row) => TicketsService.#resolveTicket({ connection, row })),
-          );
-          for (const ticket of resolved) {
-            if (ticket !== undefined) {
-              visible.push(ticket);
+          // One bulk call resolves live details and applies the visibility
+          // filter for the whole batch: keys the acting user cannot see are
+          // absent from the map, so those rows are dropped.
+          const detailsByKey = await jiraClient.getIssuesDetails({
+            accessToken: connection.accessToken,
+            cloudId: connection.cloudId,
+            issueKeys: rows.map((row) => row.jira_issue_key),
+          });
+          for (const row of rows) {
+            const details = detailsByKey.get(row.jira_issue_key);
+            if (details !== undefined) {
+              visible.push(TicketsService.#toTicket({ connection, details, row }));
             }
           }
           const lastRow = rows.at(-1);

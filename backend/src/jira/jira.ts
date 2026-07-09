@@ -15,10 +15,10 @@ import ky from "ky";
 import { createClient, createConfig } from "#jira/client/index.ts";
 import type { Client } from "#jira/client/index.ts";
 import {
+  bulkFetchIssues,
   createIssue,
   getCreateIssueMetaIssueTypeId,
   getCreateIssueMetaIssueTypes,
-  getIssue,
   searchProjects,
 } from "#jira/index.ts";
 import { config } from "../config.ts";
@@ -26,10 +26,10 @@ import { JiraApiError } from "./errors/jira-api-error.ts";
 import { RefreshTokenExpiredError } from "./errors/refresh-token-expired-error.ts";
 import {
   assignableUsersSchema,
+  bulkIssuesSchema,
   createdIssueSchema,
   fieldsSchema,
   identitySchema,
-  issueDetailsSchema,
   issueTypesSchema,
   projectsSchema,
   resourcesSchema,
@@ -52,6 +52,11 @@ export class JiraClient {
   readonly #getKy: KyInstance;
   /** ky for the create POST: retry on 429 only, never 5xx (no duplicate risk). */
   readonly #postKy: KyInstance;
+  /**
+   * ky for idempotent read POSTs (bulk issue fetch): retry like a GET on
+   * 429/503/5xx, since re-reading is safe even though the HTTP method is POST.
+   */
+  readonly #readPostKy: KyInstance;
   /** Generated Jira REST client, transport-bound to #getKy. */
   readonly #jiraClient: Client;
 
@@ -120,6 +125,16 @@ export class JiraClient {
         limit: config.constants.jira.maxRetries,
         methods: ["post"],
         statusCodes: [429],
+      },
+      throwHttpErrors: false,
+    });
+    this.#readPostKy = ky.create({
+      retry: {
+        afterStatusCodes: [429, 503],
+        jitter: true,
+        limit: config.constants.jira.maxRetries,
+        methods: ["post"],
+        statusCodes: [408, 429, 500, 502, 503, 504],
       },
       throwHttpErrors: false,
     });
@@ -421,54 +436,121 @@ export class JiraClient {
   }
 
   /**
-   * Read an issue's current title and reporter (for the live Recent Tickets
-   * row). Returns `undefined` if the acting user cannot see the issue: 404 (it
-   * was deleted, or Jira hides its existence) or 403 (issue-level security
-   * denies access), so the caller drops the reference rather than showing a row
-   * the user can't open. Other failures throw.
+   * Batch-fetch the display details for many issues in a single call
+   * (`POST /issue/bulkfetch`), returning a map from issue key to its details.
+   * Jira omits issues the acting user cannot see (deleted, or issue-level
+   * security denies access) from the response, so an absent key is exactly the
+   * Recent Tickets visibility filter: the caller drops any row whose key is not
+   * in the map. Keys are chunked to Jira's per-call cap; other failures throw.
    */
-  public async getIssueDetails({
+  public async getIssuesDetails({
     cloudId,
     accessToken,
-    issueKey,
+    issueKeys,
   }: {
     cloudId: string;
     accessToken: string;
-    issueKey: string;
-  }): Promise<
-    | {
-        title: string | undefined;
-        reporter: string | undefined;
-        priority: string | undefined;
-        status: string | undefined;
+    issueKeys: string[];
+  }): Promise<Map<string, IssueDisplayDetails>> {
+    const detailsByKey = new Map<string, IssueDisplayDetails>();
+    const chunkSize = config.constants.jira.bulkFetchMaxKeys;
+    for (let start = 0; start < issueKeys.length; start += chunkSize) {
+      const chunk = issueKeys.slice(start, start + chunkSize);
+      const { data, response } = await bulkFetchIssues({
+        baseUrl: JiraClient.#jiraApiBase(cloudId),
+        body: {
+          fields: [...config.constants.jira.issueDetailFields],
+          issueIdsOrKeys: chunk,
+        },
+        client: this.#jiraClient,
+        fetch: (input, init) => this.#readPostKy(input, init),
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (data === undefined) {
+        throw new JiraApiError({
+          message: "Failed to read issues.",
+          operation: "bulk_fetch_issues",
+          status: response?.status ?? 0,
+        });
       }
-    | undefined
-  > {
-    const { data, response } = await getIssue({
-      baseUrl: JiraClient.#jiraApiBase(cloudId),
-      client: this.#jiraClient,
-      headers: { Authorization: `Bearer ${accessToken}` },
-      path: { issueIdOrKey: issueKey },
-      query: { fields: [...config.constants.jira.issueDetailFields] },
+      const { issues } = bulkIssuesSchema.parse(data);
+      for (const issue of issues ?? []) {
+        detailsByKey.set(issue.key, {
+          priority: issue.fields?.priority?.name ?? undefined,
+          reporter: issue.fields?.reporter?.displayName ?? undefined,
+          status: issue.fields?.status?.name ?? undefined,
+          title: issue.fields?.summary ?? undefined,
+        });
+      }
+    }
+    return detailsByKey;
+  }
+
+  /**
+   * Create an issue with a hard-coded Atlassian API token via HTTP Basic auth,
+   * for the blog-summary service account (no per-user OAuth). Posts directly to
+   * the site base URL (`https://<site>.atlassian.net/rest/api/3/issue`) rather
+   * than the OAuth `api.atlassian.com` base. Issue type is the preferred type
+   * (Task) by name; description is converted to ADF. Uses the POST-only-429
+   * transport so a rate-limit retry can never create a duplicate. Throws
+   * {@link JiraApiError} (status carried) so the caller can tell a 4xx (poison:
+   * bad input/permission) from a 5xx (transient: retry).
+   */
+  public async createIssueWithToken({
+    baseUrl,
+    email,
+    apiToken,
+    projectKey,
+    title,
+    description,
+  }: {
+    baseUrl: string;
+    email: string;
+    apiToken: string;
+    projectKey: string;
+    title: string;
+    description: string;
+  }): Promise<{ key: string; url: string }> {
+    const credentials = Buffer.from(`${email}:${apiToken}`).toString("base64");
+    const response = await this.#postKy(`${baseUrl}/rest/api/3/issue`, {
+      headers: { Authorization: `Basic ${credentials}` },
+      json: {
+        fields: {
+          description: JiraClient.#toAtlassianDocumentFormat(description),
+          issuetype: { name: config.constants.preferredIssueTypeName },
+          project: { key: projectKey },
+          summary: title,
+        },
+      },
+      method: "post",
     });
-    if (data === undefined) {
-      if (response?.status === 404 || response?.status === 403) {
-        return undefined;
+    if (!response.ok) {
+      const rawBody = await response.text();
+      let parsedError: unknown;
+      try {
+        parsedError = JSON.parse(rawBody);
+      } catch {
+        parsedError = undefined;
       }
       throw new JiraApiError({
-        message: "Failed to read issue.",
-        operation: "get_issue",
-        status: response?.status ?? 0,
+        detail: JiraClient.#extractJiraErrorDetail({ error: parsedError, fieldNames: {} }),
+        message: "Failed to create summary issue.",
+        operation: "create_issue_token",
+        status: response.status,
       });
     }
-    const { fields } = issueDetailsSchema.parse(data);
-    return {
-      priority: fields?.priority?.name ?? undefined,
-      reporter: fields?.reporter?.displayName ?? undefined,
-      status: fields?.status?.name ?? undefined,
-      title: fields?.summary ?? undefined,
-    };
+    const body: unknown = await response.json();
+    const { key } = createdIssueSchema.parse(body);
+    return { key, url: `${baseUrl}/browse/${key}` };
   }
+}
+
+/** The Jira fields Recent Tickets renders for one issue. */
+export interface IssueDisplayDetails {
+  title: string | undefined;
+  reporter: string | undefined;
+  priority: string | undefined;
+  status: string | undefined;
 }
 
 /** The single shared Jira client instance. */

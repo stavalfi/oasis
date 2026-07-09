@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-ctx="${1:-$(kubectx | fzf --height 20%)}"
-[[ -n "${ctx}" ]] && kubectl config use-context "${ctx}" > /dev/null && echo "${ctx}"

@@ -14,7 +14,3 @@
 [[rule]]
 include = ["**/rauthy-config.toml"]
 schema.path = "devex/configs/toml-schemas/rauthy-config.schema.json"
-
-[[rule]]
-include = ["bunfig.toml"]
-schema.url = "https://www.schemastore.org/bunfig.json"

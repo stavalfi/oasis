@@ -14,6 +14,15 @@ import { z } from "zod";
 /** Coerce an env string to a finite number, rejecting missing or non-numeric values. */
 const numberFromEnv = z.coerce.number().refine(Number.isFinite, "must be a finite number");
 
+/**
+ * An optional string env var. An empty value (a `NAME=` line in .env) is treated
+ * as absent, so a blank placeholder does not count as configured.
+ */
+const optionalString = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.string().min(1).optional(),
+);
+
 /** Schema for the environment variables the backend needs. Unknown variables are ignored. */
 const envSchema = z.object({
   ENCRYPTION_KEY: z.string().min(1),
@@ -33,12 +42,91 @@ const envSchema = z.object({
 
 const env = envSchema.parse(process.env);
 
+/** All blog-summary secrets, required together (used when the feature is on). */
+const blogSummaryRequiredSchema = z.object({
+  AIONLABS_API_KEY: z.string(),
+  JIRA_SUMMARY_API_TOKEN: z.string(),
+  JIRA_SUMMARY_BASE_URL: z.string(),
+  JIRA_SUMMARY_EMAIL: z.string(),
+  JIRA_SUMMARY_PROJECT_KEY: z.string(),
+  KAFKA_BROKERS: z.string(),
+});
+
+/**
+ * The bonus NHI Blog Summary secrets, validated as an all-or-none group at
+ * startup: none set -> `undefined` (the feature is off and the web API runs
+ * alone); all set -> the structured config; partially set -> a validation error
+ * (fail fast, so a half-configured deploy is caught immediately). Empty `.env`
+ * values count as unset. These live outside the required `envSchema` so the web
+ * API starts without them. Summary tickets are filed by a service account (Basic
+ * auth with a hard-coded Atlassian API token), independent of the per-user OAuth
+ * path.
+ */
+const blogSummaryEnvSchema = z
+  .object({
+    AIONLABS_API_KEY: optionalString,
+    JIRA_SUMMARY_API_TOKEN: optionalString,
+    JIRA_SUMMARY_BASE_URL: optionalString,
+    JIRA_SUMMARY_EMAIL: optionalString,
+    JIRA_SUMMARY_PROJECT_KEY: optionalString,
+    KAFKA_BROKERS: optionalString,
+  })
+  .transform((vars, ctx) => {
+    if (Object.values(vars).every((value) => value === undefined)) {
+      return;
+    }
+    const required = blogSummaryRequiredSchema.safeParse(vars);
+    if (!required.success) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Blog-summary config is incomplete: set KAFKA_BROKERS, AIONLABS_API_KEY, " +
+          "JIRA_SUMMARY_BASE_URL, JIRA_SUMMARY_EMAIL, JIRA_SUMMARY_API_TOKEN, and " +
+          "JIRA_SUMMARY_PROJECT_KEY together, or none of them.",
+      });
+      return z.NEVER;
+    }
+    const { data } = required;
+    return {
+      aiApiKey: data.AIONLABS_API_KEY,
+      brokers: data.KAFKA_BROKERS.split(",")
+        .map((broker) => broker.trim())
+        .filter((broker) => broker.length > 0),
+      jira: {
+        apiToken: data.JIRA_SUMMARY_API_TOKEN,
+        baseUrl: data.JIRA_SUMMARY_BASE_URL,
+        email: data.JIRA_SUMMARY_EMAIL,
+        projectKey: data.JIRA_SUMMARY_PROJECT_KEY,
+      },
+    };
+  });
+
+const blogSummary = blogSummaryEnvSchema.parse(process.env);
+
 /** Typed, deeply frozen application configuration. Import this; never read process.env directly. */
 export const config = deepFreeze({
+  // Bonus NHI Blog Summary secrets (AIonLabs key, Kafka brokers, and the Jira
+  // service-account credentials), or undefined when the feature is off. Validated
+  // as an all-or-none group above; secrets here are redacted in logs.
+  blogSummary,
   constants: {
     // Refresh the Jira access token this many seconds before it actually
     // expires, so a call never goes out with an access token about to lapse.
     accessTokenRefreshSkewSeconds: 30,
+    // AIonLabs (OpenAI-compatible) client for the blog-summary generation. The
+    // API key comes from the environment; these are the tuning constants.
+    ai: {
+      baseUrl: "https://api.aionlabs.ai/v1",
+      // Retry the completion POST on 429 only (ky). A rate-limited request was
+      // rejected before processing, so retrying cannot duplicate work.
+      maxRetries: 4,
+      // Cap on completion tokens for the summary.
+      maxTokens: 500,
+      model: "aion-labs/aion-2.0",
+      requestTimeoutMs: 30_000,
+      // Low temperature: a factual summary, not creative writing.
+      temperature: 0.2,
+    },
     // Upper bound on a requested API key lifetime (10 years). The caller picks
     // the actual expiry when creating the key.
     apiKeyMaxExpiryDays: 3650,
@@ -51,6 +139,11 @@ export const config = deepFreeze({
     apiRetry: {
       attempts: 3,
       baseDelayMs: 100,
+    },
+    // Blog-summary ticket shaping (bonus).
+    blogSummary: {
+      // Prefixed onto the blog post title to form the Jira issue summary.
+      titlePrefix: "NHI Blog Summary: ",
     },
     cache: {
       assignableUsersTtlSeconds: 60,
@@ -71,6 +164,9 @@ export const config = deepFreeze({
       apiBaseUrl: "https://api.atlassian.com/ex/jira",
       // Cap for a single page of assignable users (POC: one page is enough).
       assignableUsersPageSize: 100,
+      // Max issue keys per POST /issue/bulkfetch call (Jira rejects over 100).
+      // Recent Tickets batches its candidate keys into calls of this size.
+      bulkFetchMaxKeys: 100,
       // The identity (/me) endpoint.
       identityUrl: "https://api.atlassian.com/me",
       // Fields fetched live per Recent Tickets row: title, reporter, priority,
@@ -85,6 +181,13 @@ export const config = deepFreeze({
       projectsPageSize: 100,
       // OAuth token exchange / refresh endpoint.
       tokenUrl: "https://auth.atlassian.com/oauth/token",
+    },
+    // Kafka wiring for the blog-summary consumer (bonus). Brokers come from the
+    // environment; these name the topic and this consumer.
+    kafka: {
+      clientId: "identityhub-backend",
+      consumerGroupId: "identityhub-blog-summary",
+      topic: "nhi-blog-posts",
     },
     // pino log level. "debug" surfaces per-layer detail; "info" is the default.
     logLevel: "info",
@@ -103,9 +206,10 @@ export const config = deepFreeze({
     recentTicketsLimit: 10,
     // Recent Tickets is project-wide but each row is filtered through the acting
     // user's own Jira token (an issue they cannot see is dropped). Because that
-    // filter runs after the DB read, we page candidates in batches and keep
-    // pulling until we have `recentTicketsLimit` visible rows or run out. The max
-    // bounds how many rows (and Jira calls) a single request will scan.
+    // filter runs after the DB read, we page candidates in batches (one bulk
+    // Jira fetch per batch resolves and visibility-filters the whole batch) and
+    // keep pulling until we have `recentTicketsLimit` visible rows or run out.
+    // The max bounds how many rows a single request will scan.
     recentTicketsScanBatchSize: 20,
     recentTicketsScanMaxRows: 200,
     // Per-user distributed lock (redlock) guarding token refresh, so concurrent

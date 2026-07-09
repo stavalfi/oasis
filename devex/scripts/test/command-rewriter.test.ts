@@ -124,8 +124,8 @@ describe("command-rewriter", { concurrency: true }, () => {
   });
 
   it("bun: passes through unchanged", async () => {
-    const out = await HookRunner.run("bun run lint");
-    assert.equal(out.hookSpecificOutput.updatedInput.command, "bun run lint");
+    const out = await HookRunner.run("npm run lint");
+    assert.equal(out.hookSpecificOutput.updatedInput.command, "npm run lint");
   });
 
   it("already-rtk-prefixed: passes through unchanged", async () => {

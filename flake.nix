@@ -265,7 +265,7 @@
         # Anthropic SDKs read ANTHROPIC_BASE_URL at startup; the proxy
         # listens on :8787 and forwards to api.anthropic.com after
         # compressing the prompt. If the container isn't running, claude
-        # calls will fail — `bun run docker-compose:up` brings it up.
+        # calls will fail — `npm run docker-compose:up` brings it up.
         # ANTHROPIC_BASE_URL = "http://127.0.0.1:8787";
 
         # Paths that depend on the current project directory are exported at
