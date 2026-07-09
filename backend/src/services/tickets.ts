@@ -8,14 +8,10 @@
  * invalidates the recent-tickets cache. Recent Tickets reads our references and
  * fetches current titles live from Jira. Both are scoped to the acting user.
  */
-import {
-  type CreateFindingRequest,
-  type CreateFindingResponse,
-  type Ticket,
-} from "../dto/types.ts";
+import type { CreateFindingRequest, CreateFindingResponse, Ticket } from "../dto/types.ts";
 import { recentTicketsResponseSchema } from "../dto/schemas.ts";
 import { jiraClient } from "../jira/jira.ts";
-import { type JiraFieldMeta } from "../jira/types.ts";
+import type { JiraFieldMeta } from "../jira/types.ts";
 import { config } from "../lib/config.ts";
 import { TicketsModel } from "../models/tickets.ts";
 import { Cache } from "../redis/cache.ts";

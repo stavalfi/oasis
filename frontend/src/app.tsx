@@ -5,7 +5,8 @@
  * checking it shows a lightweight loading state, then routes to the login page
  * or the authenticated app.
  */
-import { type ReactNode, useEffect } from "react";
+import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ApiKeysPage } from "./pages/api-keys-page.tsx";
 import { DashboardPage } from "./pages/dashboard-page.tsx";

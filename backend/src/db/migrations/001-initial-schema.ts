@@ -7,7 +7,8 @@
  * schema-agnostic, so the Kysely instance is untyped here (the typed schema is
  * generated from the live database after migrations run).
  */
-import { type Kysely, sql } from "kysely";
+import { sql } from "kysely";
+import type { Kysely } from "kysely";
 
 /** Apply the initial schema. */
 export const up = async (db: Kysely<unknown>): Promise<void> => {

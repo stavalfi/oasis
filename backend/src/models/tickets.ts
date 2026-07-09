@@ -7,7 +7,7 @@
  * writes `tickets`.
  */
 import { db } from "../db/database.ts";
-import { type TicketRow } from "./types.ts";
+import type { TicketRow } from "./types.ts";
 
 export class TicketsModel {
   /** Record an issue we created through the app. */

@@ -12,7 +12,8 @@
  * request was rejected before processing, so retrying cannot duplicate).
  */
 import ky from "ky";
-import { type Client, createClient, createConfig } from "#jira/client/index.ts";
+import { createClient, createConfig } from "#jira/client/index.ts";
+import type { Client } from "#jira/client/index.ts";
 import {
   createIssue,
   getCreateIssueMetaIssueTypeId,
@@ -33,13 +34,13 @@ import {
   resourcesSchema,
   tokensSchema,
 } from "./schemas.ts";
-import {
-  type AccessibleResource,
-  type JiraFieldMeta,
-  type JiraIdentity,
-  type JiraIssueTypeSummary,
-  type JiraProjectSummary,
-  type JiraTokens,
+import type {
+  AccessibleResource,
+  JiraFieldMeta,
+  JiraIdentity,
+  JiraIssueTypeSummary,
+  JiraProjectSummary,
+  JiraTokens,
 } from "./types.ts";
 
 type KyInstance = ReturnType<typeof ky.create>;

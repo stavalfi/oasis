@@ -16,7 +16,7 @@ import { config } from "../lib/config.ts";
 import { logger } from "../lib/logger.ts";
 import { ApiKeysService } from "../services/api-keys.ts";
 import { AuthService } from "../services/auth.ts";
-import { type AppEnv } from "./app-env.ts";
+import type { AppEnv } from "./app-env.ts";
 
 const BEARER_PREFIX = "Bearer ";
 

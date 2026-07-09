@@ -4,7 +4,7 @@
  * Builds the current-user view (identity plus connected Jira site), cached per
  * user. No tokens are ever included in the result.
  */
-import { type MeResponse } from "../dto/types.ts";
+import type { MeResponse } from "../dto/types.ts";
 import { meResponseSchema } from "../dto/schemas.ts";
 import { config } from "../lib/config.ts";
 import { JiraConnectionsModel } from "../models/jira-connections.ts";

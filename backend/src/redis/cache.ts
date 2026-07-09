@@ -11,9 +11,10 @@
  * tenant is never served another's data. Part of the redis choke point.
  */
 import KeyvRedis from "@keyv/redis";
-import { type Cache as CacheManagerCache, createCache } from "cache-manager";
+import { createCache } from "cache-manager";
+import type { Cache as CacheManagerCache } from "cache-manager";
 import { Keyv } from "keyv";
-import { type ZodType } from "zod";
+import type { ZodType } from "zod";
 import { config } from "../lib/config.ts";
 
 export class Cache {

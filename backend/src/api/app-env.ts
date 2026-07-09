@@ -5,7 +5,7 @@
  * request-scoped variables (request id, per-request logger, and the
  * authenticated user id set by the auth middleware).
  */
-import { type Logger } from "../lib/logger.ts";
+import type { Logger } from "../lib/logger.ts";
 
 export interface AppEnv {
   Variables: {

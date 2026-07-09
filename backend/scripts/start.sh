@@ -5,10 +5,17 @@
 # the frontend runner. Fails fast if any step fails.
 set -euo pipefail
 
+repo_root=$(git rev-parse --show-toplevel)
+cd "${repo_root}"
+
 # Load .env into this shell so the discrete POSTGRES_* vars are available for
 # composing the codegen URL below. Node commands pass --env-file=.env
 # themselves; this `source` is only for the bash-level url composition.
 set -a
+# VSCode's shellcheck runs without our rcfile (no external-sources), so it can't
+# follow .env; disable the "not following" info here. The CLI rcfile does follow
+# .env, so it still sees the POSTGRES_* vars used below (no SC2154).
+# shellcheck disable=SC1091
 source .env
 set +a
 
@@ -39,5 +46,8 @@ if [[ ! -f "${cert_file}" || ! -f "${key_file}" ]]; then
     -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1"
 fi
 
+echo "==> Building the frontend (served as static files by the backend)"
+vite build
+
 echo "==> Starting server"
-node backend/src/index.ts
+node backend/src/index.ts | bunx pino-pretty --singleLine

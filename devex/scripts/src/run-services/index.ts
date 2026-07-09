@@ -1,5 +1,7 @@
-import { type CliArgs, CliBuilder } from "./cli-builder.ts";
-import { type Service, ServiceEnv } from "./service-env.ts";
+import { CliBuilder } from "./cli-builder.ts";
+import type { CliArgs } from "./cli-builder.ts";
+import { ServiceEnv } from "./service-env.ts";
+import type { Service } from "./service-env.ts";
 import { GossGenerator } from "./goss-generator.ts";
 import { LivenessChecks } from "./liveness-checks.ts";
 import path from "node:path";

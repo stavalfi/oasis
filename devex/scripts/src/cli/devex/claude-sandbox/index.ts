@@ -1,4 +1,4 @@
-import { type Command } from "@commander-js/extra-typings";
+import type { Command } from "@commander-js/extra-typings";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
 import { homedir } from "node:os";

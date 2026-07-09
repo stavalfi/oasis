@@ -4,7 +4,8 @@
  * Manage machine credentials: create a key (shown once) and revoke existing
  * ones. Loads the key list on mount.
  */
-import { type ReactNode, useEffect } from "react";
+import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { ApiKeyList } from "../components/api-key-list.tsx";
 import { CreateApiKeyDialog } from "../components/create-api-key-dialog.tsx";
 import { Header } from "../components/header.tsx";

@@ -7,7 +7,8 @@
  * where they appear in a logged object. Per-request child loggers (carrying
  * `request_id` and `user_id`) are created at the edge in middleware.
  */
-import pino, { type Logger } from "pino";
+import pino from "pino";
+import type { Logger } from "pino";
 import { config } from "./config.ts";
 
 export type { Logger };

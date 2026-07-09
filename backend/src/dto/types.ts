@@ -5,18 +5,18 @@
  * schemas in schemas.ts are the single source of truth on the backend; the
  * frontend keeps its own equivalent plain types.
  */
-import { type z } from "zod";
-import {
-  type apiKeyMetadataSchema,
-  type createApiKeyRequestSchema,
-  type createApiKeyResponseSchema,
-  type createFindingRequestSchema,
-  type createFindingResponseSchema,
-  type errorResponseSchema,
-  type fieldMetaSchema,
-  type meResponseSchema,
-  type projectSchema,
-  type ticketSchema,
+import type { z } from "zod";
+import type {
+  apiKeyMetadataSchema,
+  createApiKeyRequestSchema,
+  createApiKeyResponseSchema,
+  createFindingRequestSchema,
+  createFindingResponseSchema,
+  errorResponseSchema,
+  fieldMetaSchema,
+  meResponseSchema,
+  projectSchema,
+  ticketSchema,
 } from "./schemas.ts";
 
 export type MeResponse = z.infer<typeof meResponseSchema>;

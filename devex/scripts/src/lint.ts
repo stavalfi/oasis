@@ -282,7 +282,15 @@ class Lint {
       );
       return { name: "oxlint", ok: true, output: stdout + stderr };
     } catch (error: unknown) {
-      return Lint.#captureExecError({ error, name: "oxlint" });
+      const outcome = Lint.#captureExecError({ error, name: "oxlint" });
+      // When every explicitly-passed path is covered by oxlint's ignore config
+      // (e.g. lint-staged passing only the generated backend/src/db/schema.ts),
+      // oxlint exits non-zero with "No files found to lint". That is a no-op,
+      // not a lint failure, so treat it as success.
+      if (!outcome.ok && outcome.output.includes("No files found to lint")) {
+        return { name: "oxlint", ok: true, output: "" };
+      }
+      return outcome;
     }
   }
 

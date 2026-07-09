@@ -8,7 +8,7 @@
  */
 import { db } from "../db/database.ts";
 import { FieldCrypto } from "../lib/crypto.ts";
-import { type JiraConnection } from "./types.ts";
+import type { JiraConnection } from "./types.ts";
 
 export class JiraConnectionsModel {
   /**

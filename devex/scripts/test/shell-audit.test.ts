@@ -1,4 +1,4 @@
-import { type HookInput, type HookOutput } from "../src/shell-audit/command-generation.ts";
+import type { HookInput, HookOutput } from "../src/shell-audit/command-generation.ts";
 import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import { exec } from "node:child_process";

@@ -1,5 +1,5 @@
 import { Command, Option } from "@commander-js/extra-typings";
-import { type Env, type Service } from "./service-env.ts";
+import type { Env, Service } from "./service-env.ts";
 
 const ENVS = ["local", "dev", "stg", "prod"] as const;
 const SUPPORTED_SERVICES = ["appi"] as const;

@@ -1,8 +1,8 @@
-import { type ChildProcess, type PromiseWithChild } from "node:child_process";
+import type { ChildProcess, PromiseWithChild } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { type Server as HttpServer } from "node:http";
-import { type MappingFile } from "../src/run-services/service-env.ts";
-import { type Server } from "node:net";
+import type { Server as HttpServer } from "node:http";
+import type { MappingFile } from "../src/run-services/service-env.ts";
+import type { Server } from "node:net";
 // eslint-disable-next-line no-duplicate-imports
 import { createServer as createHttpServer } from "node:http";
 // eslint-disable-next-line no-duplicate-imports

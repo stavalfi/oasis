@@ -6,7 +6,7 @@
  * that reads or writes `users` in Postgres.
  */
 import { db } from "../db/database.ts";
-import { type UserRow } from "./types.ts";
+import type { UserRow } from "./types.ts";
 
 export class UsersModel {
   /**

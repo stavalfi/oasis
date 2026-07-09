@@ -4,7 +4,8 @@
  * The main authenticated view: pick a project, create a finding, and see the
  * recent app-created tickets for that project. Loads the project list on mount.
  */
-import { type ReactNode, useEffect } from "react";
+import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { CreateFindingForm } from "../components/create-finding-form.tsx";
 import { Header } from "../components/header.tsx";
 import { ProjectPicker } from "../components/project-picker.tsx";

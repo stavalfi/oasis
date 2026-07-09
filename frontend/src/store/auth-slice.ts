@@ -5,7 +5,8 @@
  * current user. `loadCurrentUser` runs on startup; a 401 there means logged out.
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { type MeResponse, fetchMe, postLogout } from "../client.ts";
+import { fetchMe, postLogout } from "../client.ts";
+import type { MeResponse } from "../client.ts";
 
 type AuthStatus = "checking" | "loggedIn" | "loggedOut";
 

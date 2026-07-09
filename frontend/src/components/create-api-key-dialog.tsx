@@ -4,7 +4,8 @@
  * Create an API key from a human label. The raw key is shown exactly once with
  * a copy button and an explicit "you will not see this again" warning.
  */
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
+import type { ReactNode } from "react";
 import { clearNewlyCreatedKey, createApiKey } from "../store/api-keys-slice.ts";
 import { useAppDispatch, useAppSelector } from "../store/hooks.ts";
 

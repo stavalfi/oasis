@@ -6,7 +6,8 @@
  * optional fields the project exposes. Values are validated live and the work
  * is saved to localStorage per project so a failed submit never loses input.
  */
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { createFinding } from "../store/tickets-slice.ts";
 import { useAppDispatch, useAppSelector } from "../store/hooks.ts";
 

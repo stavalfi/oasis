@@ -7,10 +7,10 @@
  * are set automatically. Cached per user. Delivered with the project list so the
  * frontend can render and validate the form without extra round trips.
  */
-import { type FieldMeta, type Project } from "../dto/types.ts";
+import type { FieldMeta, Project } from "../dto/types.ts";
 import { projectsResponseSchema } from "../dto/schemas.ts";
 import { jiraClient } from "../jira/jira.ts";
-import { type JiraFieldMeta } from "../jira/types.ts";
+import type { JiraFieldMeta } from "../jira/types.ts";
 import { config } from "../lib/config.ts";
 import { Cache } from "../redis/cache.ts";
 import { JiraAccess } from "./jira-access.ts";

@@ -4,7 +4,8 @@
  * A searchable-by-typing dropdown of the projects the user can create issues in
  * (so there are no dead options). Selecting one loads its recent tickets.
  */
-import { type ReactNode, useEffect } from "react";
+import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { useAppDispatch, useAppSelector } from "../store/hooks.ts";
 import { selectProject } from "../store/projects-slice.ts";
 import { loadRecentTickets } from "../store/tickets-slice.ts";

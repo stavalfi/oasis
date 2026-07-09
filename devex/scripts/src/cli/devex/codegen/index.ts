@@ -1,4 +1,4 @@
-import { type Command } from "@commander-js/extra-typings";
+import type { Command } from "@commander-js/extra-typings";
 import { Crd2Pulumi } from "./crd2pulumi.ts";
 import { JiraGenTypes } from "./jira-gen-types.ts";
 import { RauthyFetchSpec } from "./rauthy-fetch-spec.ts";

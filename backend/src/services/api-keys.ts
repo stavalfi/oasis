@@ -6,11 +6,11 @@
  * operations are scoped to the acting user; the machine path resolves the
  * owning user from the key hash.
  */
-import { type ApiKeyMetadata, type CreateApiKeyResponse } from "../dto/types.ts";
+import type { ApiKeyMetadata, CreateApiKeyResponse } from "../dto/types.ts";
 import { config } from "../lib/config.ts";
 import { Tokens } from "../lib/tokens.ts";
 import { ApiKeysModel } from "../models/api-keys.ts";
-import { type ApiKeyMetadata as ApiKeyMetadataRow } from "../models/types.ts";
+import type { ApiKeyMetadata as ApiKeyMetadataRow } from "../models/types.ts";
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 

@@ -8,6 +8,7 @@
  * wires routes to services. Both thrown errors and request-validation failures
  * map through the same error responder.
  */
+import { serveStatic } from "@hono/node-server/serve-static";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
@@ -28,7 +29,7 @@ import {
   ProjectsService,
   TicketsService,
 } from "../services/index.ts";
-import { type AppEnv } from "./app-env.ts";
+import type { AppEnv } from "./app-env.ts";
 import { ErrorHandler } from "./error-handler.ts";
 import { Middleware } from "./middleware.ts";
 
@@ -248,3 +249,12 @@ export const app = openApiApp
   });
 
 export type AppType = typeof app;
+
+// Serve the Vite-built React app from the same origin as the API, so the app's
+// relative URLs and the session cookie work without a proxy or CORS. Registered
+// after every API/auth route (as statements, to keep them out of AppType): a
+// request reaches these only when no API route matched. First try a real file
+// under frontend/dist (hashed JS/CSS, index.html); on a miss, fall back to
+// index.html so client-side routes like /login and /dashboard load the SPA.
+app.get("*", serveStatic({ root: "./frontend/dist" }));
+app.get("*", serveStatic({ path: "./frontend/dist/index.html" }));

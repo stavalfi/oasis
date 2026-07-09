@@ -4,8 +4,10 @@
  * API key management: the list, the create lifecycle, and the raw key shown
  * exactly once after creation.
  */
-import { type PayloadAction, createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { type ApiKeyMetadata, deleteApiKey, fetchApiKeys, postApiKey } from "../client.ts";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import type { PayloadAction } from "@reduxjs/toolkit";
+import { deleteApiKey, fetchApiKeys, postApiKey } from "../client.ts";
+import type { ApiKeyMetadata } from "../client.ts";
 
 export interface ApiKeysState {
   list: ApiKeyMetadata[];

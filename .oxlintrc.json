@@ -19,7 +19,7 @@
     "nursery": "error"
   },
   "rules": {
-    "import/consistent-type-specifier-style": ["error", "prefer-inline"],
+    "import/consistent-type-specifier-style": ["error", "prefer-top-level"],
     "import/no-dynamic-require": ["error", { "esmodule": true }],
     "poc-rules/no-anonymous-functions": "error",
     "poc-rules/no-zod-passthrough": "error",
@@ -86,7 +86,7 @@
     "no-await-in-loop": "off",
     "no-continue": "error",
     "no-unused-expressions": "error",
-    "no-duplicate-imports": "error",
+    "no-duplicate-imports": ["error", { "allowSeparateTypeImports": true }],
     "prefer-destructuring": "error",
     "require-unicode-regexp": "error",
     "require-await": "error",

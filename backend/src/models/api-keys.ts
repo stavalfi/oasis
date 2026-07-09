@@ -6,7 +6,7 @@
  * acting `user_id`. The only code that reads or writes `api_keys`.
  */
 import { db } from "../db/database.ts";
-import { type ApiKeyAuthRow, type ApiKeyMetadata } from "./types.ts";
+import type { ApiKeyAuthRow, ApiKeyMetadata } from "./types.ts";
 
 export class ApiKeysModel {
   /**

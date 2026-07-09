@@ -5,7 +5,7 @@
  * multi-tenant user is never unsure whose Jira they are filing into), a link to
  * API keys, and logout.
  */
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { logout } from "../store/auth-slice.ts";
 import { useAppDispatch, useAppSelector } from "../store/hooks.ts";

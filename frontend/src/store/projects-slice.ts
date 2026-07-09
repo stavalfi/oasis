@@ -6,7 +6,8 @@
  * round trips.
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { type Project, fetchProjects } from "../client.ts";
+import { fetchProjects } from "../client.ts";
+import type { Project } from "../client.ts";
 
 export interface ProjectsState {
   list: Project[];

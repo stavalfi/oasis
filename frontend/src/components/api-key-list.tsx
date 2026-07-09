@@ -4,7 +4,7 @@
  * The user's API keys with metadata. Revoke asks for confirmation (destructive)
  * and takes effect immediately.
  */
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { revokeApiKey } from "../store/api-keys-slice.ts";
 import { useAppDispatch, useAppSelector } from "../store/hooks.ts";
 import { formatDate } from "../util/dates.ts";

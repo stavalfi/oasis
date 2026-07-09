@@ -6,8 +6,13 @@
  * change becomes a compile error here. Every call sends the session cookie.
  * These thin wrappers return the typed body; the store's thunks call them.
  */
-import { type AppType } from "#backend/api/app.ts";
-import { type InferRequestType, type InferResponseType, hc } from "hono/client";
+// Top-level `import type` (enforced by import/consistent-type-specifier-style)
+// is fully erased. The inline `import { type AppType }` form would, under
+// verbatimModuleSyntax, leave a side-effect `import "#backend/api/app.ts"` that
+// drags the whole backend (redis, kysely, pg) into the browser bundle.
+import type { AppType } from "#backend/api/app.ts";
+import { hc } from "hono/client";
+import type { InferRequestType, InferResponseType } from "hono/client";
 
 const client = hc<AppType>("/", { init: { credentials: "include" } });
 

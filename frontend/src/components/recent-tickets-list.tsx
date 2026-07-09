@@ -5,7 +5,7 @@
  * issue in a new tab and shows its current title (fetched live by the backend)
  * and a relative time.
  */
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useAppSelector } from "../store/hooks.ts";
 import { formatRelativeTime } from "../util/dates.ts";
 

@@ -5,12 +5,8 @@
  * finding refreshes that project's recent list so the new ticket appears.
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import {
-  type CreateFindingRequest,
-  type Ticket,
-  fetchRecentTickets,
-  postFinding,
-} from "../client.ts";
+import { fetchRecentTickets, postFinding } from "../client.ts";
+import type { CreateFindingRequest, Ticket } from "../client.ts";
 
 export interface TicketsState {
   recentByProjectKey: Record<string, Ticket[]>;

@@ -4,7 +4,7 @@
  * The unauthenticated landing page: a single "Connect Jira" button that starts
  * the OAuth flow. Surfaces a calm message if a previous attempt failed.
  */
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { goToLogin } from "../client.ts";
 

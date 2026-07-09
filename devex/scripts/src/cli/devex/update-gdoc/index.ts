@@ -1,11 +1,12 @@
-import { type Command } from "@commander-js/extra-typings";
+import type { Command } from "@commander-js/extra-typings";
 import { authenticate } from "@google-cloud/local-auth";
 import { execFile } from "node:child_process";
 import { access, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { google, type docs_v1 } from "googleapis";
+import { google } from "googleapis";
+import type { docs_v1 } from "googleapis";
 import { z } from "zod";
 
 const execFileAsync = promisify(execFile);

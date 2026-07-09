@@ -4,8 +4,8 @@
  * Domain types for the models layer: row aliases derived from the generated
  * Kysely schema, plus the curated shapes model functions return.
  */
-import { type Selectable } from "kysely";
-import { type Tickets, type Users } from "../db/schema.ts";
+import type { Selectable } from "kysely";
+import type { Tickets, Users } from "../db/schema.ts";
 
 export type UserRow = Selectable<Users>;
 export type TicketRow = Selectable<Tickets>;

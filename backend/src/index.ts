@@ -24,6 +24,7 @@ serve(
     serverOptions: { cert: tls.cert, key: tls.key },
   },
   (info) => {
-    logger.info({ port: info.port }, "IdentityHub backend listening over https");
+    const url = `https://localhost:${info.port}`;
+    logger.info({ url }, `IdentityHub ready. Open the UI at ${url}`);
   },
 );

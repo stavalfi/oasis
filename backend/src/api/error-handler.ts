@@ -7,12 +7,12 @@
  * 400/404, auth/reconnect are 401, Jira upstream is 502, and anything
  * unexpected is 500 (with the request id for support).
  */
-import { type Context } from "hono";
+import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { type ContentfulStatusCode } from "hono/utils/http-status";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { ZodError } from "zod";
-import { type ErrorResponse } from "../dto/types.ts";
-import { type AppEnv } from "./app-env.ts";
+import type { ErrorResponse } from "../dto/types.ts";
+import type { AppEnv } from "./app-env.ts";
 import {
   InvalidFindingError,
   JiraApiError,
