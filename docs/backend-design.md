@@ -80,10 +80,10 @@ backend/src/
   jira/         Atlassian client. A single `jira.ts` class is the ONLY code that
                 calls Atlassian (token exchange, accessible-resources, identity,
                 createmeta, issue create/read). Nothing else talks to Jira.
-  blog/         Oasis blog client (bonus). A single class is the ONLY code that
-                fetches oasis.security/blog. See NHI Blog Digest automation.
   ai/           AI client (bonus). A single class is the ONLY code that calls the
-                AIonLabs API. See NHI Blog Digest automation.
+                AIonLabs API. Used by the blog-digest Kafka consumer.
+  kafka/        Kafka client (bonus). The ONLY code that talks to Kafka. Hosts the
+                blog-post consumer. See NHI Blog Digest automation.
   db/
     migrations/ Kysely migration files.
     schema.ts   typed database schema for Kysely.
@@ -836,7 +836,7 @@ sequenceDiagram
   Backend->>Backend: acquire per-user refresh lock (redlock), re-read row
   Backend->>Auth: POST /oauth/token (grant_type=refresh_token + client_secret)
   Auth-->>Backend: new access_token + new rotated refresh_token
-  Backend->>DB: overwrite tokens WHERE version matches, bump version; release lock
+  Backend->>DB: overwrite tokens WHERE version matches, bump version, release lock
   Backend->>Jira: POST issue (Bearer new access_token)
   Jira-->>Backend: created (issue key)
   Backend->>DB: record ticket, delete recent-tickets cache key
