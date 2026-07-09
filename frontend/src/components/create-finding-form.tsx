@@ -226,6 +226,12 @@ export const CreateFindingForm = (): ReactNode => {
             </select>
           );
         } else {
+          let inputType = "text";
+          if (field.type === "date") {
+            inputType = "date";
+          } else if (field.type === "number") {
+            inputType = "number";
+          }
           control = (
             <input
               className="field__input"
@@ -233,7 +239,7 @@ export const CreateFindingForm = (): ReactNode => {
                 setFieldValue({ fieldId: field.fieldId, value: event.target.value })
               }
               placeholder={field.type === "array" ? "comma, separated, values" : ""}
-              type={field.type === "date" ? "date" : "text"}
+              type={inputType}
               value={draft.fieldValues[field.fieldId] ?? ""}
             />
           );

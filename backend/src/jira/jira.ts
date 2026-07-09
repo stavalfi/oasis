@@ -65,7 +65,13 @@ export class JiraClient {
    * `{ errorMessages: [...], errors: { <field>: <reason> } }`; we join the
    * general messages and the per-field reasons into one sentence.
    */
-  static #extractJiraErrorDetail(error: unknown): string | undefined {
+  static #extractJiraErrorDetail({
+    error,
+    fieldNames,
+  }: {
+    error: unknown;
+    fieldNames: Record<string, string>;
+  }): string | undefined {
     if (typeof error !== "object" || error === null) {
       return undefined;
     }
@@ -76,7 +82,7 @@ export class JiraClient {
     if ("errors" in error && typeof error.errors === "object" && error.errors !== null) {
       for (const [fieldId, reason] of Object.entries(error.errors)) {
         if (typeof reason === "string") {
-          reasons.push(`${fieldId}: ${reason}`);
+          reasons.push(`${fieldNames[fieldId] ?? fieldId}: ${reason}`);
         }
       }
     }
@@ -96,6 +102,7 @@ export class JiraClient {
     this.#getKy = ky.create({
       retry: {
         afterStatusCodes: [429, 503],
+        jitter: true,
         limit: config.constants.jira.maxRetries,
         methods: ["get"],
         statusCodes: [429, 503],
@@ -105,6 +112,7 @@ export class JiraClient {
     this.#postKy = ky.create({
       retry: {
         afterStatusCodes: [429],
+        jitter: true,
         limit: config.constants.jira.maxRetries,
         methods: ["post"],
         statusCodes: [429],
@@ -350,6 +358,7 @@ export class JiraClient {
     title,
     description,
     extraFields,
+    fieldNames,
   }: {
     cloudId: string;
     accessToken: string;
@@ -358,6 +367,9 @@ export class JiraClient {
     title: string;
     description: string;
     extraFields: Record<string, unknown>;
+    // Maps Jira field ids to human names, so a field error reads
+    // "Budget Amount: ..." instead of "customfield_10121: ...".
+    fieldNames: Record<string, string>;
   }): Promise<{ key: string }> {
     const { data, error, response } = await createIssue({
       baseUrl: JiraClient.#jiraApiBase(cloudId),
@@ -376,7 +388,7 @@ export class JiraClient {
     });
     if (data === undefined) {
       throw new JiraApiError({
-        detail: JiraClient.#extractJiraErrorDetail(error),
+        detail: JiraClient.#extractJiraErrorDetail({ error, fieldNames }),
         message: "Failed to create issue.",
         operation: "create_issue",
         status: response?.status ?? 0,

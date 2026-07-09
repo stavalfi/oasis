@@ -44,6 +44,10 @@ export class TicketsService {
       case "datetime": {
         return String(value);
       }
+      case "number": {
+        // Jira number fields must be a real number, not a string.
+        return Number(value);
+      }
       case "array": {
         const items = Array.isArray(value) ? value : [value];
         if (field.fieldId === "labels") {
@@ -160,12 +164,16 @@ export class TicketsService {
       fields: fieldMeta,
       provided: input.fields ?? {},
     });
+    // Field id -> human name, so a Jira field error names the field the user
+    // sees ("Budget Amount") instead of the raw id ("customfield_10121").
+    const fieldNames = Object.fromEntries(fieldMeta.map((field) => [field.fieldId, field.name]));
 
     const created = await jiraClient.createIssue({
       accessToken: connection.accessToken,
       cloudId: connection.cloudId,
       description: input.description,
       extraFields,
+      fieldNames,
       issueTypeId,
       projectKey: input.projectKey,
       title: input.title,
