@@ -3,7 +3,7 @@
  *
  * Resolves a ready-to-use Jira access token for a user, refreshing proactively
  * when the stored access token has (nearly) expired. This is where the
- * "transparent refresh" behavior lives: callers get a fresh token and never see
+ * "transparent refresh" behavior lives: callers get a fresh access token and never see
  * the refresh. Propagates RefreshTokenExpiredError (reconnect) and
  * NotConnectedError to the API layer.
  */
@@ -43,16 +43,16 @@ export class JiraAccess {
       };
     }
 
-    const refreshedTokens = await jiraClient.refreshTokens(connection.refreshToken);
-    const accessTokenExpiresAt = new Date(Date.now() + refreshedTokens.expiresInSeconds * 1000);
+    const newTokens = await jiraClient.exchangeRefreshToken(connection.refreshToken);
+    const accessTokenExpiresAt = new Date(Date.now() + newTokens.expiresInSeconds * 1000);
     await JiraConnectionsModel.updateTokens({
-      accessToken: refreshedTokens.accessToken,
+      accessToken: newTokens.accessToken,
       accessTokenExpiresAt,
-      refreshToken: refreshedTokens.refreshToken,
+      refreshToken: newTokens.refreshToken,
       userId,
     });
     return {
-      accessToken: refreshedTokens.accessToken,
+      accessToken: newTokens.accessToken,
       cloudId: connection.cloudId,
       siteUrl: connection.siteUrl,
     };

@@ -37,7 +37,7 @@ const env = envSchema.parse(process.env);
 export const config = deepFreeze({
   constants: {
     // Refresh the Jira access token this many seconds before it actually
-    // expires, so a call never goes out with a token about to lapse.
+    // expires, so a call never goes out with an access token about to lapse.
     accessTokenRefreshSkewSeconds: 30,
     // Upper bound on a requested API key lifetime (10 years). The caller picks
     // the actual expiry when creating the key.
@@ -82,7 +82,7 @@ export const config = deepFreeze({
       audience: "api.atlassian.com",
       authorizeUrl: "https://auth.atlassian.com/authorize",
       // Granular scopes for the operations we call, plus identity and refresh.
-      scopes: "read:jira-work write:jira-work read:me offline_access",
+      scopes: "read:jira-work write:jira-work read:jira-user read:me offline_access",
     },
     // OAuth CSRF `state` lifetime: long enough to log in, short enough to bound
     // replay. The state is single-use (consumed on callback).

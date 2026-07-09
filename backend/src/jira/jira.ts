@@ -147,11 +147,12 @@ export class JiraClient {
   }
 
   /**
-   * Refresh the access token using the (rotating) refresh token. Throws
-   * {@link RefreshTokenExpiredError} on invalid_grant so the caller can force a
-   * reconnect.
+   * Get a fresh access token by exchanging the user's (rotating) refresh token.
+   * Atlassian also returns a NEW refresh token each time (it rotates them on
+   * use), so the caller must persist both. Throws {@link RefreshTokenExpiredError}
+   * on invalid_grant so the caller can force a reconnect.
    */
-  public async refreshTokens(refreshToken: string): Promise<JiraTokens> {
+  public async exchangeRefreshToken(refreshToken: string): Promise<JiraTokens> {
     const response = await this.#postKy(config.constants.jira.tokenUrl, {
       json: {
         client_id: config.jira.clientId,
